@@ -56,7 +56,7 @@ async function run() {
   assert(validateExternalConsent({ ...base, stopped: true }, 'intimate').status === 'STOPPED', 'STOPPED');
   assert(validateExternalConsent({ ...base, paused: true }, 'intimate').status === 'PAUSED', 'PAUSED');
   assert(validateExternalConsent({ ...base, revoked: true }, 'intimate').status === 'REVOKED', 'REVOKED');
-  assert(validateExternalConsent({ ...base, expiresAt: Date.now() - 1 }, 'intimate').status === 'EXPIRED', 'EXPIRED');
+  assert(validateExternalConsent({ ...base, issuedAt: Date.now()-10000, expiresAt: Date.now()-5000 }, 'intimate').status === 'EXPIRED', 'EXPIRED');
   assert(validateExternalConsent({ ...base, expiresAt: base.issuedAt - 1 }, 'intimate').status === 'MALFORMED', 'expires before issued');
   assert(validateExternalConsent(base, 'intimate').status === 'CONTRACT_PENDING', 'valid-looking still PENDING');
   assert(validateExternalConsent(base, 'intimate').allowed === false, 'never allowed');
@@ -69,7 +69,6 @@ async function run() {
     assert(r.success === false, `${a} not success`);
   }
   const before = actions.getBody();
-  const needsBefore = { hunger: 50 };
   const eatR = await actions.execute({ id: uuid(), action: 'eat', urgency: 0.5, createdAt: Date.now() });
   assert(eatR.lifecycle === 'NOT_IMPLEMENTED' && eatR.success === false, 'eat NOT_IMPLEMENTED');
   assert(JSON.stringify(before) === JSON.stringify(actions.getBody()), 'no body mutation');
@@ -119,13 +118,10 @@ async function run() {
 
   // Stop / generation
   console.log('\nStop');
-  const countBefore = act.getActionCount();
   loop.start();
   await new Promise(r => setTimeout(r, 50));
   loop.stop();
   await new Promise(r => setTimeout(r, 200));
-  const countAfter = act.getActionCount();
-  // Allow at most one in-flight that started before stop; no continuous post-stop growth
   loop.start();
   assert(loop.getStatus().running === true, 'restart ok');
   loop.stop();
