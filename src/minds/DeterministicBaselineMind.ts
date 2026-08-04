@@ -1,28 +1,26 @@
 import { v4 as uuid } from 'uuid';
-import { Mind, CognitionContext, Intention, ActionId, DeliberationResult, InfluenceEvent } from '../core/types';
+import { Mind, CognitionContext, Intention, ActionId, DeliberationResult } from '../core/types';
 
 /**
- * DeterministicBaselineMind
- *
- * A fixed-priority demonstration policy. Not an open-ended deliberator.
- * The Mind *interface* is open-ended; this implementation is deterministic.
- *
- * - Never emits interpersonal actions from need scores.
- * - Rejects negated and ambiguous voice commands.
- * - Never places raw private transcripts into reasoning.
- * - Returns explicit accepted / rejected / deferred influence IDs.
+ * DeterministicBaselineMind — fixed priority demonstration policy.
+ * Not open-ended. Interface is open-ended; this implementation is not.
  */
 export class DeterministicBaselineMind implements Mind {
   name = 'DeterministicBaselineMind-v1';
 
+  // Bounded exact/near-exact phrases only (fail-closed)
+  private static readonly WALK_PHRASES = [
+    'walk', 'walk please', 'please walk', 'go to kitchen', 'go to bathroom', 'go to bedroom',
+  ];
+  private static readonly REST_PHRASES = ['rest', 'nap', 'sleep', 'please rest', 'please nap'];
+  private static readonly EAT_PHRASES = ['eat', 'please eat', 'i am hungry'];
+
   async deliberate(ctx: CognitionContext): Promise<DeliberationResult> {
     const { needs, perception, recentInfluences, bodyState } = ctx;
-
     const accepted: string[] = [];
     const rejected: string[] = [];
     const deferred: string[] = [];
 
-    // Critical physiological
     if (needs.criticalSignals.includes('bladder')) {
       return this.result(this.intend('useRestroom', 0.95, 'Critical bladder'), accepted, rejected, deferred);
     }
@@ -36,7 +34,6 @@ export class DeterministicBaselineMind implements Mind {
       return this.result(this.intend('nap', 0.85, 'Exhausted'), accepted, rejected, deferred);
     }
 
-    // Strong aware physiological
     if (needs.awareSignals.includes('bladder') && needs.needs.bladder > 65) {
       return this.result(this.intend('useRestroom', 0.75, 'Need restroom'), accepted, rejected, deferred);
     }
@@ -62,30 +59,26 @@ export class DeterministicBaselineMind implements Mind {
       return this.result(this.intend('work', 0.5, 'Need purpose'), accepted, rejected, deferred);
     }
 
-    // Optional influence handling (explicit accept/reject)
     for (const inf of recentInfluences) {
       if (inf.channel !== 'voice' || typeof inf.content !== 'string') {
         deferred.push(inf.id);
         continue;
       }
-      const text = (inf.content as string).toLowerCase().trim();
+      const text = (inf.content as string).toLowerCase().trim().replace(/[.!?]+$/, '');
 
-      // Negation / ambiguity rejection
-      if (this.isNegatedOrAmbiguous(text)) {
+      if (this.isNegated(text)) {
         rejected.push(inf.id);
         continue;
       }
-
       if (inf.strength < 0.55) {
         deferred.push(inf.id);
         continue;
       }
 
-      // Safe positive mappings only
-      if (this.matchesPositive(text, ['walk', 'go to'])) {
+      if (this.matchesPhrase(text, DeterministicBaselineMind.WALK_PHRASES)) {
         accepted.push(inf.id);
         return this.result(
-          this.intend('walk', 0.4, 'Accepted voice influence (walk)', undefined, {
+          this.intend('walk', 0.4, 'Accepted walk phrase', undefined, {
             destination: this.extractDest(text),
           }),
           accepted,
@@ -93,16 +86,15 @@ export class DeterministicBaselineMind implements Mind {
           deferred
         );
       }
-      if (this.matchesPositive(text, ['rest', 'sleep', 'nap'])) {
+      if (this.matchesPhrase(text, DeterministicBaselineMind.REST_PHRASES)) {
         accepted.push(inf.id);
-        return this.result(this.intend('nap', 0.45, 'Accepted voice influence (rest)'), accepted, rejected, deferred);
+        return this.result(this.intend('nap', 0.45, 'Accepted rest phrase'), accepted, rejected, deferred);
       }
-      if (this.matchesPositive(text, ['eat', 'hungry'])) {
+      if (this.matchesPhrase(text, DeterministicBaselineMind.EAT_PHRASES)) {
         accepted.push(inf.id);
-        return this.result(this.intend('eat', 0.4, 'Accepted voice influence (eat)'), accepted, rejected, deferred);
+        return this.result(this.intend('eat', 0.4, 'Accepted eat phrase'), accepted, rejected, deferred);
       }
 
-      // Unrecognized → defer
       deferred.push(inf.id);
     }
 
@@ -113,17 +105,12 @@ export class DeterministicBaselineMind implements Mind {
     return this.result(null, accepted, rejected, deferred);
   }
 
-  private isNegatedOrAmbiguous(text: string): boolean {
-    const negation = /\b(don'?t|do not|never|stop|no|not)\b/;
-    if (negation.test(text)) return true;
-    // Conflicting pairs
-    if (text.includes('walk') && text.includes('stay')) return true;
-    if (text.includes('eat') && text.includes('fast')) return true;
-    return false;
+  private isNegated(text: string): boolean {
+    return /\b(don'?t|do not|never|stop|no|not)\b/.test(text);
   }
 
-  private matchesPositive(text: string, keywords: string[]): boolean {
-    return keywords.some(k => text.includes(k));
+  private matchesPhrase(text: string, phrases: string[]): boolean {
+    return phrases.some(p => text === p || text.startsWith(p + ' ') || text.endsWith(' ' + p));
   }
 
   private intend(
@@ -139,7 +126,7 @@ export class DeterministicBaselineMind implements Mind {
       target,
       parameters,
       urgency,
-      reasoning, // never contains raw transcript
+      reasoning,
       createdAt: Date.now(),
     };
   }
