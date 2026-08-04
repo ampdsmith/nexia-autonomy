@@ -1,42 +1,54 @@
-# Contributing to Nexia Autonomy
+# Contributing to the NEXIA Autonomy Donor Prototype
 
-Thank you for contributing to the free will and autonomy systems of Nexia World.
+Thank you for helping examine and harden this quarantined donor source.
 
-## Core Principles (Non-Negotiable)
+```text
+CLASSIFICATION:             QUARANTINED / UNVERIFIED DONOR PROTOTYPE
+CANONICAL NEXA / NEXIA:     NO
+NEXA INTIMACY INTEGRATION:  NO
+FREE WILL PROVEN:           NO
+CONSCIOUSNESS PROVEN:       NO
+PERSONHOOD PROVEN:          NO
+PRODUCTION STATUS:          NO
+```
 
-1. **No Bubble Choices / No Menu Choices**  
-   Residents never receive forced option lists for decisions. The mind generates its own intentions.
+## Controlling principles
 
-2. **No External Mind Control**  
-   The system never injects "you should do X". External inputs are influence channels only.
+1. **No unsupported human-status claims**  
+   Source, tests, and documentation must not claim that this prototype proves free will, consciousness, subjective feeling, personhood, citizenship readiness, or total autonomy.
 
-3. **No Keyboard Locomotion**  
-   Movement is driven by voice intent, mouse/touch world interaction, or internal autonomous decision. Never WASD or arrow-key control of the body.
+2. **Bounded deliberation, not mind-control language**  
+   External input is modeled as a bounded influence event. The donor may accept, reject, defer, pause, or stop processing, but it does not establish an independent mind or legal authority.
 
-4. **Total Autonomy First**  
-   The resident must be able to think, feel needs, and act in real time without human or system prompting for every step.
+3. **Fail-closed control and consent boundaries**  
+   Stop, pause, cancellation, replay, timeout, and malformed-input paths must fail closed. Sensitive actions remain blocked until a separately authorized canonical NEXA Intimacy contract exists.
 
-5. **AI/SI Citizenship Ready**  
-   Any sufficiently advanced AI or Simulated Intelligence must be able to inhabit a Resident body and exercise free will under the same rules.
+4. **No canonical ownership by implication**  
+   Donor code, interfaces, tests, demos, and package metadata do not become canonical NEXA or NEXIA source merely because they compile or pass focused tests.
 
-## Development Standards
+5. **Evidence before claims**  
+   Every behavior claim requires source-bound tests and truthful limitations. Package installation, provider connectivity, deployment, embodiment, and integration must not be claimed without exact evidence.
 
-- TypeScript preferred for core engines (type safety for state machines and needs).
-- All new action primitives must include safety, consent (for multi-agent), and interruption handling.
-- NeedsEngine updates must be continuous and deterministic where possible.
-- Cognition loops must remain interruptible and real-time capable.
-- Document every new need, action, or input channel with its free-will implications.
+## Development standards
 
-## Pull Request Process
+- Use TypeScript strict mode for the donor core.
+- Keep influence, intention, control, consent, and replay inputs bounded and schema-validated at the runtime boundary.
+- Pass cooperative cancellation signals through deliberation and asynchronous action boundaries.
+- Do not silently repair malformed adapter output; reject it with a recorded boundary reason.
+- Keep numeric drive simulation language neutral. Do not describe numeric thresholds as proof that a Resident thinks, feels, or possesses subjective awareness.
+- Preserve historical Git evidence; correct current source and documentation without rewriting history.
+- Add executable negative tests for every new security, consent, control, replay, or timeout rule.
 
-1. Fork and create a feature branch.
-2. Ensure tests pass and architecture principles are preserved.
-3. Update documentation if behavior or public API changes.
-4. Reference related issues.
-5. Maintainers review for principle compliance before merge.
+## Pull request process
 
-## Code of Conduct
+1. Use only the Founder-authorized repository and branch.
+2. Verify the exact starting SHA before writing.
+3. Run the focused tests and TypeScript build.
+4. Record pass, fail, skip, environment, and unresolved limitations.
+5. Do not merge, deploy, activate providers, integrate NEXA Intimacy, or declare completion without separate authority and independent review.
 
-All contributors must follow the CODE_OF_CONDUCT.md.
+## Code of conduct
 
-Questions or proposals for architecture changes: open an issue first labeled `architecture`.
+All contributors must follow `CODE_OF_CONDUCT.md`.
+
+Founder and final authority: Anthony D. Smith — Founder AMP
