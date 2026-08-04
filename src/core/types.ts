@@ -31,6 +31,8 @@ export const ACTION_IDS = [
 ] as const;
 
 export type ActionId = typeof ACTION_IDS[number];
+export type CognitionControl = 'NONE' | 'PAUSE' | 'STOP';
+export type CognitionControlState = 'ACTIVE' | 'PAUSED' | 'STOPPED';
 
 export type ActionLifecycle =
   | 'REQUESTED' | 'VALIDATED' | 'STARTED' | 'INTERRUPTED'
@@ -51,6 +53,7 @@ export interface DeliberationResult {
   acceptedInfluenceIds: string[];
   rejectedInfluenceIds: string[];
   deferredInfluenceIds: string[];
+  control?: CognitionControl;
 }
 
 export interface InfluenceEvent {
@@ -102,7 +105,7 @@ export interface BodyState {
 }
 
 export interface Mind {
-  deliberate(context: Readonly<CognitionContext>): Promise<DeliberationResult>;
+  deliberate(context: Readonly<CognitionContext>, signal: AbortSignal): Promise<DeliberationResult>;
   name?: string;
 }
 
