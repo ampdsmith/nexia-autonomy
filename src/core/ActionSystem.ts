@@ -1,13 +1,12 @@
-import { ActionId, Intention, ActionResult, NeedType, BodyState } from './types';
+import { Intention, ActionResult, BodyState, ActionLifecycle } from './types';
 import { validateExternalConsent, ExternalConsentDecision } from './ConsentBoundary';
 
 /**
- * ActionSystem (hardened donor version)
+ * ActionSystem (correction cycle)
  *
- * Executes intentions. Provides feedback.
- * All interpersonal and intimate actions are fail-closed.
- * This donor never authorizes touch or intimacy from internal need scores
- * or from a local capability boolean.
+ * Unimplemented actions return lifecycle NOT_IMPLEMENTED,
+ * success=false, partial=false, and perform zero body or need mutation.
+ * Implementation maturity is never encoded as Resident success.
  */
 export class ActionSystem {
   private body: BodyState;
@@ -21,142 +20,102 @@ export class ActionSystem {
   }
 
   async execute(intention: Intention): Promise<ActionResult> {
-    const { action, target, parameters } = intention;
+    const { action } = intention;
 
-    // Basic safety: cannot act while falling unless recovering
     if (this.body.posture === 'falling' && action !== 'getUp') {
-      return {
-        intentionId: intention.id,
-        success: false,
-        partial: false,
-        message: 'Cannot perform action while falling. Must recover first.',
-      };
+      return this.fail(intention.id, 'FAILED', 'Cannot perform action while falling.');
     }
 
     switch (action) {
-      case 'walk':
-      case 'run':
-      case 'hop':
-      case 'jump':
-      case 'skip':
-        return this.locomote(intention);
-
+      // Fully local safety actions that can run without external world
       case 'fall':
         this.body.posture = 'falling';
-        return { intentionId: intention.id, success: true, partial: false, message: 'Fell.' };
+        return this.ok(intention.id, 'COMPLETED', 'Fell.');
 
       case 'getUp':
         if (this.body.posture === 'falling' || this.body.posture === 'lying') {
           this.body.posture = 'standing';
-          return { intentionId: intention.id, success: true, partial: false, message: 'Got back up.' };
+          return this.ok(intention.id, 'COMPLETED', 'Got back up.');
         }
-        return { intentionId: intention.id, success: false, partial: false, message: 'Already upright.' };
+        return this.fail(intention.id, 'FAILED', 'Already upright.');
 
-      case 'eat':
-        // STUB: no real inventory or food object check yet
-        return this.applyNeedRelief(intention, { hunger: -35, energy: -5 }, 'STUB: eat succeeded without inventory or food validation');
+      case 'idle':
+      case 'observe':
+        return this.ok(intention.id, 'COMPLETED', 'Observing / resting in place.');
 
-      case 'drink':
-        // STUB: no real water source check yet
-        return this.applyNeedRelief(intention, { thirst: -40, bladder: +8 }, 'STUB: drink succeeded without source validation');
+      case 'speak':
+        return this.ok(intention.id, 'COMPLETED', `Spoke: ${(intention.parameters?.text as string) ?? '...'}`);
 
-      case 'useRestroom':
-        // STUB: no facility check yet
-        return this.applyNeedRelief(intention, { bladder: -70 }, 'STUB: restroom use succeeded without facility validation');
-
-      case 'nap':
-        this.body.posture = 'lying';
-        return this.applyNeedRelief(intention, { energy: -45, comfort: -10 }, 'STUB: nap succeeded without environment suitability check');
-
-      case 'bathe':
-        // STUB: no facility check yet
-        return this.applyNeedRelief(intention, { hygiene: -50, comfort: -5 }, 'STUB: bathe succeeded without facility validation');
-
-      case 'brushTeeth':
-        return this.applyNeedRelief(intention, { hygiene: -15 }, 'STUB: brushTeeth');
-
-      case 'combHair':
-        return this.applyNeedRelief(intention, { hygiene: -8, comfort: -3 }, 'STUB: combHair');
-
-      case 'dress':
-      case 'undress':
-        // STUB: clothing state not fully modeled
-        return {
-          intentionId: intention.id,
-          success: true,
-          partial: true,
-          message: `STUB: ${action} reported success but clothing inventory is not yet fully implemented.`,
-        };
-
-      case 'cook':
-        // STUB: no ingredients or kitchen validation
-        return {
-          intentionId: intention.id,
-          success: true,
-          partial: true,
-          message: 'STUB: cook reported success without ingredients or facility validation.',
-          newStateHints: { purpose: -5, hunger: -5 },
-        };
-
-      case 'work':
-        return this.applyNeedRelief(intention, { purpose: -25, energy: +8, curiosity: -5 }, 'STUB: work');
-
-      // Interpersonal and intimate actions — fail-closed donor boundary
+      // Interpersonal — always fail-closed until canonical consent exists
       case 'hug':
       case 'touch':
       case 'kiss':
       case 'grab':
       case 'intimate': {
-        const externalDecision = (parameters?.externalConsent as ExternalConsentDecision) || null;
+        const externalDecision = (intention.parameters?.externalConsent as ExternalConsentDecision) || null;
         const purpose = action === 'intimate' ? 'intimate' : action;
         const validation = validateExternalConsent(externalDecision, purpose);
-
         return {
           intentionId: intention.id,
+          lifecycle: 'FAILED',
           success: false,
           partial: false,
           message: `[FAIL-CLOSED] ${validation.message} (status: ${validation.status})`,
         };
       }
 
-      case 'idle':
-      case 'observe':
-        return { intentionId: intention.id, success: true, partial: false, message: 'Observing / resting in place.' };
-
-      case 'speak':
-        return { intentionId: intention.id, success: true, partial: false, message: `Spoke: ${parameters?.text ?? '...'}` };
+      // Everything else is still NOT_IMPLEMENTED in this donor.
+      // No body mutation. No need mutation.
+      case 'walk':
+      case 'run':
+      case 'hop':
+      case 'jump':
+      case 'skip':
+      case 'eat':
+      case 'drink':
+      case 'useRestroom':
+      case 'nap':
+      case 'bathe':
+      case 'brushTeeth':
+      case 'combHair':
+      case 'dress':
+      case 'undress':
+      case 'cook':
+      case 'work':
+        return this.notImplemented(intention.id, action);
 
       default:
-        return { intentionId: intention.id, success: false, partial: false, message: `Unknown action: ${action}` };
+        return this.fail(intention.id, 'FAILED', `Unknown action: ${action}`);
     }
   }
 
-  private locomote(intention: Intention): ActionResult {
-    // STUB: location is a string rewrite only. No physics, collision, or pathfinding.
-    const dest = (intention.parameters?.destination as string) || intention.target || 'nearby';
-    this.body.location = dest;
-    this.body.posture = 'standing';
-    const cost = intention.action === 'run' ? 8 : intention.action === 'jump' ? 6 : 3;
+  private ok(intentionId: string, lifecycle: ActionLifecycle, message: string): ActionResult {
     return {
-      intentionId: intention.id,
+      intentionId,
+      lifecycle,
       success: true,
-      partial: true,
-      message: `STUB: ${intention.action} to ${dest} (string location only, no physics)`,
-      newStateHints: { energy: cost, curiosity: -2 },
+      partial: false,
+      message,
     };
   }
 
-  private applyNeedRelief(
-    intention: Intention,
-    deltas: Partial<Record<NeedType, number>>,
-    note: string
-  ): ActionResult {
+  private fail(intentionId: string, lifecycle: ActionLifecycle, message: string): ActionResult {
     return {
-      intentionId: intention.id,
-      success: true,
-      partial: true,
-      message: note,
-      newStateHints: deltas,
+      intentionId,
+      lifecycle,
+      success: false,
+      partial: false,
+      message,
+    };
+  }
+
+  private notImplemented(intentionId: string, action: string): ActionResult {
+    return {
+      intentionId,
+      lifecycle: 'NOT_IMPLEMENTED',
+      success: false,
+      partial: false,
+      message: `NOT_IMPLEMENTED: ${action} has no real embodiment, facility, inventory, or physics in this donor. Zero state mutation.`,
     };
   }
 }
