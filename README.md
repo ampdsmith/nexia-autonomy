@@ -12,31 +12,32 @@ PERSONHOOD PROVEN:       NO
 PRODUCTION STATUS:       NO
 ```
 
-## Correction cycle (post independent review)
+## Correction cycle 002
 
-- Influence consumption is now explicit via `acceptedInfluenceIds` / `rejectedInfluenceIds` / `deferredInfluenceIds`.
-- Duplicate / replayed influence IDs are rejected via a bounded processed-ID ledger.
-- `stop()` uses a generation token. Stale deliberation results are discarded. Overlapping loops are prohibited.
-- Unimplemented actions return `lifecycle: NOT_IMPLEMENTED`, `success: false`, `partial: false` and perform **zero** body or need mutation.
-- Explicit action lifecycle: REQUESTED / VALIDATED / STARTED / INTERRUPTED / PARTIALLY_COMPLETED / COMPLETED / FAILED / NOT_IMPLEMENTED.
-- Consent remains fail-closed donor-side only (`CONTRACT_PENDING`). No local valid path.
-- Baseline mind renamed to `DeterministicBaselineMind`. Negated and ambiguous voice commands are rejected. Raw transcripts never appear in reasoning.
-- Tests expanded to exercise CognitionLoop, stop, NOT_IMPLEMENTED non-mutation, and negation rejection.
+- Removed stale `SimpleAutonomousMind` (interface mismatch).
+- Consent preflight: no VALID; actor/target/action/authority fields; always CONTRACT_PENDING for execution.
+- Influence ingestion returns explicit status (pending duplicate, processed, malformed, wrong resident, etc.).
+- Deliberation envelope IDs validated against active set only; must be disjoint.
+- `targetResidentId`, TTL, timestamps, confidence enforced at loop boundary.
+- Bounded phrase recognition (not substring).
+- `speak` is NOT_IMPLEMENTED; no private text echo.
+- Expanded executable tests (26 pass).
+- `tsc` clean.
 
-## Run tests
+## Run
 
 ```bash
-npm install
+npm install   # or npm ci once package-lock.json is present
 npm test
+npm run build
 ```
 
-## Known limitations (honest)
+## Known limitations
 
-- No `package-lock.json` yet (deterministic install requires local `npm install` to generate it).
-- No real world embodiment, physics, inventory, or facility systems.
+- `package-lock.json` was generated and verified with `npm ci` + full test/build in the builder environment; if missing from this branch tip, re-run `npm install` locally to produce a registry-compatible lockfile.
 - No GitHub Actions CI workflow yet.
-- Consent envelope is a preflight that always blocks until canonical NEXA Intimacy integration exists.
-- Advanced design targets (Observatory, Continuity Vault, etc.) remain design targets only.
+- No real embodiment/physics/inventory.
+- Consent is preflight-only until canonical NEXA Intimacy integration exists.
 
 ## Branch discipline
 
