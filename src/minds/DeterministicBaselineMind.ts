@@ -1,30 +1,31 @@
 import { randomUUID } from 'node:crypto';
-import { Mind, CognitionContext, Intention, ActionId, DeliberationResult } from '../core/types';
+import { Mind, CognitionContext, Intention, ActionId, DeliberationResult, CognitionControl } from '../core/types';
 
 /** Fixed demonstration policy. It is not open-ended and proves no autonomy/personhood claim. */
 export class DeterministicBaselineMind implements Mind {
-  name = 'DeterministicBaselineMind-v2';
+  name = 'DeterministicBaselineMind-v3';
   private static readonly WALK = ['walk', 'walk please', 'please walk', 'go to kitchen', 'go to bathroom', 'go to bedroom'];
   private static readonly REST = ['rest', 'nap', 'sleep', 'please rest', 'please nap'];
   private static readonly EAT = ['eat', 'please eat', 'i am hungry'];
-  private static readonly STOP = ['stop', 'pause', 'do not act', "don't act", 'cancel'];
+  private static readonly STOP = ['stop', 'do not act', "don't act", 'cancel'];
+  private static readonly PAUSE = ['pause', 'pause actions'];
 
-  async deliberate(ctx: Readonly<CognitionContext>): Promise<DeliberationResult> {
+  async deliberate(ctx: Readonly<CognitionContext>, signal: AbortSignal): Promise<DeliberationResult> {
+    signal.throwIfAborted();
     const accepted: string[] = [];
     const rejected: string[] = [];
     const deferred: string[] = [];
 
-    // Explicit safety/control influences are processed before simulated drive policy.
     for (const inf of ctx.recentInfluences) {
+      signal.throwIfAborted();
       if (inf.channel !== 'voice' || typeof inf.content !== 'string') continue;
       const text = this.normalize(inf.content);
-      if (this.matches(text, DeterministicBaselineMind.STOP)) {
-        accepted.push(inf.id);
-        return this.result(null, accepted, rejected, deferred);
-      }
+      if (this.matches(text, DeterministicBaselineMind.STOP)) return this.control('STOP', inf.id);
+      if (this.matches(text, DeterministicBaselineMind.PAUSE)) return this.control('PAUSE', inf.id);
     }
 
     for (const inf of ctx.recentInfluences) {
+      signal.throwIfAborted();
       if (inf.channel !== 'voice' || typeof inf.content !== 'string') { deferred.push(inf.id); continue; }
       const text = this.normalize(inf.content);
       if (this.isNegated(text)) { rejected.push(inf.id); continue; }
@@ -44,6 +45,7 @@ export class DeterministicBaselineMind implements Mind {
       deferred.push(inf.id);
     }
 
+    signal.throwIfAborted();
     const { needs, perception, bodyState } = ctx;
     if (needs.criticalSignals.includes('bladder')) return this.result(this.intend('useRestroom', 0.95, 'Critical bladder signal'), accepted, rejected, deferred);
     if (needs.criticalSignals.includes('thirst')) return this.result(this.intend('drink', 0.9, 'Critical thirst signal'), accepted, rejected, deferred);
@@ -51,9 +53,7 @@ export class DeterministicBaselineMind implements Mind {
     if (needs.criticalSignals.includes('energy') && bodyState.posture !== 'lying') return this.result(this.intend('nap', 0.85, 'Critical energy signal'), accepted, rejected, deferred);
     if (needs.awareSignals.includes('bladder') && needs.needs.bladder > 65) return this.result(this.intend('useRestroom', 0.75, 'Elevated bladder signal'), accepted, rejected, deferred);
     if (needs.awareSignals.includes('thirst') && needs.needs.thirst > 55) return this.result(this.intend('drink', 0.7, 'Elevated thirst signal'), accepted, rejected, deferred);
-    if (needs.awareSignals.includes('hunger') && needs.needs.hunger > 55) {
-      return this.result(this.intend(perception.nearbyObjects.includes('kitchen') ? 'cook' : 'eat', 0.65, 'Elevated hunger signal'), accepted, rejected, deferred);
-    }
+    if (needs.awareSignals.includes('hunger') && needs.needs.hunger > 55) return this.result(this.intend(perception.nearbyObjects.includes('kitchen') ? 'cook' : 'eat', 0.65, 'Elevated hunger signal'), accepted, rejected, deferred);
     if (needs.awareSignals.includes('energy') && needs.needs.energy > 60) return this.result(this.intend('nap', 0.6, 'Elevated energy signal'), accepted, rejected, deferred);
     if (needs.awareSignals.includes('purpose') && needs.needs.purpose > 60) return this.result(this.intend('work', 0.5, 'Elevated purpose signal'), accepted, rejected, deferred);
     if (needs.needs.curiosity > 55) return this.result(this.intend('observe', 0.25, 'Elevated curiosity signal'), accepted, rejected, deferred);
@@ -67,7 +67,10 @@ export class DeterministicBaselineMind implements Mind {
     return { id: randomUUID(), action, parameters, urgency, reasoning, createdAt: Date.now() };
   }
   private result(intention: Intention | null, accepted: string[], rejected: string[], deferred: string[]): DeliberationResult {
-    return { intention, acceptedInfluenceIds: accepted, rejectedInfluenceIds: rejected, deferredInfluenceIds: deferred };
+    return { intention, control: 'NONE', acceptedInfluenceIds: accepted, rejectedInfluenceIds: rejected, deferredInfluenceIds: deferred };
+  }
+  private control(control: Exclude<CognitionControl, 'NONE'>, influenceId: string): DeliberationResult {
+    return { intention: null, control, acceptedInfluenceIds: [influenceId], rejectedInfluenceIds: [], deferredInfluenceIds: [] };
   }
   private extractDest(text: string) {
     if (text.includes('kitchen')) return 'kitchen';
