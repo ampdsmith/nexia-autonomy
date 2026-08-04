@@ -2,13 +2,8 @@ import { v4 as uuid } from 'uuid';
 import { Mind, Perception, BodyState, InfluenceEvent } from './types';
 import { NeedsEngine } from './NeedsEngine';
 import { ActionSystem } from './ActionSystem';
-import { CognitionLoop } from './CognitionLoop';
+import { CognitionLoop, InfluenceIngestionResult } from './CognitionLoop';
 
-/**
- * Resident (correction cycle)
- * Host for an open-ended Mind adapter.
- * Does not prove free will, consciousness, or personhood.
- */
 export class Resident {
   readonly id: string;
   readonly name: string;
@@ -21,7 +16,6 @@ export class Resident {
     this.id = uuid();
     this.name = name;
     this.mind = mind;
-
     this.needs = new NeedsEngine();
 
     const body: BodyState = {
@@ -41,21 +35,25 @@ export class Resident {
       environmentNotes: ['quiet interior space'],
     };
 
-    this.cognition = new CognitionLoop(mind, this.needs, this.actions, initialPerception);
+    this.cognition = new CognitionLoop(
+      mind,
+      this.needs,
+      this.actions,
+      initialPerception,
+      this.id
+    );
   }
 
   awaken() {
     this.cognition.start();
-    console.log(`[Resident ${this.name}] Cognition loop started.`);
   }
 
   sleep() {
     this.cognition.stop();
-    console.log(`[Resident ${this.name}] Cognition stopped. No further actions will start.`);
   }
 
-  influence(event: InfluenceEvent) {
-    this.cognition.pushInfluence(event);
+  influence(event: InfluenceEvent): InfluenceIngestionResult {
+    return this.cognition.pushInfluence(event);
   }
 
   updateWorld(perception: Perception) {
