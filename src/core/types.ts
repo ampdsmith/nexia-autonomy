@@ -1,26 +1,11 @@
 /**
- * Nexia Autonomy Core Types (hardening correction cycle)
- *
- * Quarantined autonomy-framework donor for possible future use inside NEXIA.
- * OPEN-ENDED DELIBERATION ADAPTER: YES
- * AUTONOMOUS DECISION POLICY: POSSIBLE
- * FREE WILL PROVEN: NO
- * CONSCIOUSNESS PROVEN: NO
- * PERSONHOOD PROVEN: NO
+ * Quarantined autonomy-framework donor types.
+ * This source does not prove free will, consciousness, personhood, or canonical NEXA/NEXIA authority.
  */
 
 export type NeedType =
-  | 'hunger'
-  | 'thirst'
-  | 'bladder'
-  | 'energy'
-  | 'hygiene'
-  | 'social'
-  | 'intimacy'
-  | 'comfort'
-  | 'safety'
-  | 'curiosity'
-  | 'purpose';
+  | 'hunger' | 'thirst' | 'bladder' | 'energy' | 'hygiene'
+  | 'social' | 'intimacy' | 'comfort' | 'safety' | 'curiosity' | 'purpose';
 
 export interface NeedState {
   type: NeedType;
@@ -37,23 +22,19 @@ export interface NeedsSnapshot {
   criticalSignals: NeedType[];
 }
 
-export type ActionId =
-  | 'walk' | 'run' | 'hop' | 'jump' | 'skip' | 'fall' | 'getUp'
-  | 'dress' | 'undress' | 'bathe' | 'brushTeeth' | 'combHair'
-  | 'cook' | 'eat' | 'drink' | 'useRestroom' | 'nap' | 'work'
-  | 'hug' | 'touch' | 'kiss' | 'grab' | 'intimate'
-  | 'idle' | 'observe' | 'speak';
+export const ACTION_IDS = [
+  'walk', 'run', 'hop', 'jump', 'skip', 'fall', 'getUp',
+  'dress', 'undress', 'bathe', 'brushTeeth', 'combHair',
+  'cook', 'eat', 'drink', 'useRestroom', 'nap', 'work',
+  'hug', 'touch', 'kiss', 'grab', 'intimate',
+  'idle', 'observe', 'speak',
+] as const;
 
-/** Explicit action lifecycle. Implementation maturity is not encoded as success. */
+export type ActionId = typeof ACTION_IDS[number];
+
 export type ActionLifecycle =
-  | 'REQUESTED'
-  | 'VALIDATED'
-  | 'STARTED'
-  | 'INTERRUPTED'
-  | 'PARTIALLY_COMPLETED'
-  | 'COMPLETED'
-  | 'FAILED'
-  | 'NOT_IMPLEMENTED';
+  | 'REQUESTED' | 'VALIDATED' | 'STARTED' | 'INTERRUPTED'
+  | 'PARTIALLY_COMPLETED' | 'COMPLETED' | 'FAILED' | 'NOT_IMPLEMENTED';
 
 export interface Intention {
   id: string;
@@ -61,13 +42,10 @@ export interface Intention {
   target?: string;
   parameters?: Record<string, unknown>;
   urgency: number;
-  reasoning?: string; // must never contain raw private transcripts
+  reasoning?: string;
   createdAt: number;
 }
 
-/**
- * Mind returns this envelope so the loop can consume only explicitly handled influences.
- */
 export interface DeliberationResult {
   intention: Intention | null;
   acceptedInfluenceIds: string[];
@@ -80,13 +58,13 @@ export interface InfluenceEvent {
   channel: 'voice' | 'mouse' | 'touch';
   content: string | object;
   timestamp: number;
-  strength: number;          // 0-1
+  strength: number;
   expiresAt: number;
   consumed: boolean;
   speakerId?: string;
-  targetResidentId?: string; // optional resident target
-  provenance?: string;       // source system / session id
-  confidence?: number;       // 0-1 recognition confidence when available
+  targetResidentId: string;
+  provenance: string;
+  confidence?: number;
 }
 
 export interface Perception {
@@ -109,7 +87,7 @@ export interface ActionResult {
 export interface CognitionContext {
   needs: NeedsSnapshot;
   perception: Perception;
-  recentInfluences: InfluenceEvent[]; // only non-expired, non-consumed, non-processed
+  recentInfluences: InfluenceEvent[];
   recentActions: ActionResult[];
   bodyState: BodyState;
   personalityHints?: string;
@@ -123,16 +101,18 @@ export interface BodyState {
   inventory: string[];
 }
 
-/**
- * Mind interface.
- * Implementing this does not prove free will, consciousness, or personhood.
- */
 export interface Mind {
-  deliberate(context: CognitionContext): Promise<DeliberationResult>;
+  deliberate(context: Readonly<CognitionContext>): Promise<DeliberationResult>;
   name?: string;
 }
 
-/** Bounded TTL validation constants (ms) */
 export const INFLUENCE_TTL_MIN_MS = 500;
 export const INFLUENCE_TTL_MAX_MS = 120_000;
 export const INFLUENCE_TTL_DEFAULT_MS = 30_000;
+export const INFLUENCE_FUTURE_SKEW_MAX_MS = 5_000;
+export const INFLUENCE_CONTENT_MAX_BYTES = 4_096;
+export const INFLUENCE_PROVENANCE_MAX_LENGTH = 200;
+export const INTENTION_MAX_AGE_MS = 120_000;
+export const INTENTION_FUTURE_SKEW_MAX_MS = 5_000;
+export const INTENTION_REASONING_MAX_LENGTH = 512;
+export const INTENTION_PARAMETERS_MAX_BYTES = 8_192;
