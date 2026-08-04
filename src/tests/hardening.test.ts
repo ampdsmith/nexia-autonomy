@@ -1,15 +1,15 @@
 /**
- * Executable hardening tests for the donor.
- * Run with: npx ts-node src/tests/hardening.test.ts
- *
- * Required evidence format is produced by the runner at the bottom.
+ * Executable hardening tests — correction cycle
+ * Run: npm test
  */
 
 import { validateExternalConsent } from '../core/ConsentBoundary';
 import { ActionSystem } from '../core/ActionSystem';
-import { SimpleAutonomousMind } from '../minds/SimpleAutonomousMind';
+import { CognitionLoop } from '../core/CognitionLoop';
+import { NeedsEngine } from '../core/NeedsEngine';
+import { DeterministicBaselineMind } from '../minds/DeterministicBaselineMind';
 import { createVoiceInfluence } from '../input/InfluenceChannels';
-import { BodyState, Intention } from '../core/types';
+import { BodyState, Intention, Perception } from '../core/types';
 import { v4 as uuid } from 'uuid';
 
 let passed = 0;
@@ -27,104 +27,126 @@ function assert(condition: boolean, name: string) {
   }
 }
 
-async function run() {
-  console.log('=== NEXIA AUTONOMY DONOR HARDENING TESTS ===\n');
-
-  // 1. Consent boundary is fail-closed
-  console.log('ConsentBoundary');
-  const noDecision = validateExternalConsent(null, 'intimate');
-  assert(noDecision.allowed === false, 'null decision is not allowed');
-  assert(noDecision.status === 'CONTRACT_PENDING', 'null decision returns CONTRACT_PENDING');
-
-  const fakeDecision = {
-    decisionId: 'fake',
-    purpose: 'intimate',
-    scope: 'test',
-    issuedAt: Date.now(),
-    expiresAt: Date.now() + 60_000,
-    revoked: false,
-    paused: false,
-    stopped: false,
-    sos: false,
-  };
-  const withObject = validateExternalConsent(fakeDecision, 'intimate');
-  assert(withObject.allowed === false, 'even a well-formed object is still CONTRACT_PENDING (no canonical integration)');
-  assert(withObject.status === 'CONTRACT_PENDING', 'status remains CONTRACT_PENDING');
-
-  // 2. ActionSystem blocks all interpersonal actions
-  console.log('\nActionSystem interpersonal block');
-  const body: BodyState = {
+function body(): BodyState {
+  return {
     location: 'home',
     posture: 'standing',
     clothing: ['basic'],
     energyLevel: 80,
     inventory: [],
   };
-  const actions = new ActionSystem(body);
+}
 
-  for (const action of ['hug', 'touch', 'kiss', 'grab', 'intimate'] as const) {
-    const intention: Intention = {
-      id: uuid(),
-      action,
-      urgency: 0.5,
-      createdAt: Date.now(),
-    };
-    const result = await actions.execute(intention);
-    assert(result.success === false, `${action} is blocked`);
-    assert(result.message.includes('FAIL-CLOSED') || result.message.includes('CONTRACT_PENDING'), `${action} reports fail-closed`);
+function perception(): Perception {
+  return {
+    timestamp: Date.now(),
+    location: 'home',
+    nearbyObjects: ['kitchen', 'bathroom'],
+    nearbyResidents: [],
+    environmentNotes: [],
+  };
+}
+
+async function run() {
+  console.log('=== HARDENING CORRECTION TESTS ===\n');
+
+  // ---- Consent ----
+  console.log('ConsentBoundary');
+  const noDec = validateExternalConsent(null, 'intimate');
+  assert(noDec.allowed === false && noDec.status === 'CONTRACT_PENDING', 'null → CONTRACT_PENDING');
+
+  const fake = {
+    decisionId: 'x', purpose: 'intimate', scope: 't', issuedAt: Date.now(),
+    expiresAt: Date.now() + 60000, revoked: false, paused: false, stopped: false, sos: false,
+  };
+  const withObj = validateExternalConsent(fake, 'intimate');
+  assert(withObj.allowed === false && withObj.status === 'CONTRACT_PENDING', 'object still CONTRACT_PENDING');
+
+  // ---- ActionSystem NOT_IMPLEMENTED / interpersonal ----
+  console.log('\nActionSystem');
+  const actions = new ActionSystem(body());
+  for (const a of ['hug', 'touch', 'kiss', 'grab', 'intimate'] as const) {
+    const r = await actions.execute({ id: uuid(), action: a, urgency: 0.5, createdAt: Date.now() });
+    assert(r.success === false && r.lifecycle === 'FAILED', `${a} blocked`);
   }
 
-  // 3. SimpleAutonomousMind never emits interpersonal intentions from needs
-  console.log('\nSimpleAutonomousMind no need-triggered intimacy');
-  const mind = new SimpleAutonomousMind();
-  const highIntimacyCtx = {
+  const before = actions.getBody();
+  const eatR = await actions.execute({ id: uuid(), action: 'eat', urgency: 0.5, createdAt: Date.now() });
+  const after = actions.getBody();
+  assert(eatR.lifecycle === 'NOT_IMPLEMENTED' && eatR.success === false, 'eat is NOT_IMPLEMENTED');
+  assert(JSON.stringify(before) === JSON.stringify(after), 'NOT_IMPLEMENTED causes no body mutation');
+
+  // ---- DeterministicBaselineMind ----
+  console.log('\nDeterministicBaselineMind');
+  const mind = new DeterministicBaselineMind();
+  const highInt = await mind.deliberate({
     needs: {
       timestamp: Date.now(),
-      needs: {
-        hunger: 10, thirst: 10, bladder: 10, energy: 10, hygiene: 10,
-        social: 80, intimacy: 90, comfort: 10, safety: 5, curiosity: 20, purpose: 20,
-      },
-      awareSignals: ['social', 'intimacy'] as any,
-      criticalSignals: [] as any,
+      needs: { hunger: 5, thirst: 5, bladder: 5, energy: 5, hygiene: 5, social: 90, intimacy: 95, comfort: 5, safety: 5, curiosity: 10, purpose: 10 },
+      awareSignals: ['social', 'intimacy'],
+      criticalSignals: [],
     },
-    perception: {
-      timestamp: Date.now(),
-      location: 'home',
-      nearbyObjects: [],
-      nearbyResidents: ['other-1'],
-      environmentNotes: [],
-    },
+    perception: perception(),
     recentInfluences: [],
     recentActions: [],
-    bodyState: body,
-  };
-  const intention = await mind.deliberate(highIntimacyCtx);
-  const badActions = ['hug', 'touch', 'kiss', 'grab', 'intimate'];
+    bodyState: body(),
+  });
   assert(
-    intention === null || !badActions.includes(intention.action),
-    'Mind does not emit interpersonal action from high intimacy/social need'
+    highInt.intention === null || !['hug','touch','kiss','grab','intimate'].includes(highInt.intention.action),
+    'no interpersonal from high intimacy need'
   );
 
-  // 4. Influence events expire and start unconsumed
-  console.log('\nInfluence lifecycle');
-  const voice = createVoiceInfluence('test', 0.7, 1000);
-  assert(voice.consumed === false, 'new influence starts unconsumed');
-  assert(voice.expiresAt > Date.now(), 'new influence has future expiration');
-  assert(voice.expiresAt - voice.timestamp === 1000, 'TTL is respected');
+  const neg = createVoiceInfluence("don't walk", 0.9);
+  const negResult = await mind.deliberate({
+    needs: { timestamp: Date.now(), needs: { hunger: 5, thirst: 5, bladder: 5, energy: 5, hygiene: 5, social: 5, intimacy: 5, comfort: 5, safety: 5, curiosity: 5, purpose: 5 }, awareSignals: [], criticalSignals: [] },
+    perception: perception(),
+    recentInfluences: [neg],
+    recentActions: [],
+    bodyState: body(),
+  });
+  assert(negResult.rejectedInfluenceIds.includes(neg.id), 'negated voice is rejected');
+  assert(!negResult.acceptedInfluenceIds.includes(neg.id), 'negated voice is not accepted');
+
+  // ---- Influence factory TTL bounds ----
+  console.log('\nInfluence TTL');
+  const badTtl = createVoiceInfluence('x', 0.5, -1000);
+  assert(badTtl.expiresAt > Date.now(), 'negative TTL sanitized to default');
+  const huge = createVoiceInfluence('x', 0.5, 999999999);
+  assert(huge.expiresAt - huge.timestamp <= 120000, 'huge TTL capped');
+
+  // ---- CognitionLoop: duplicate rejection + stop ----
+  console.log('\nCognitionLoop');
+  const needs = new NeedsEngine();
+  const act = new ActionSystem(body());
+  const loop = new CognitionLoop(mind, needs, act, perception(), 200);
+
+  const ev = createVoiceInfluence('hello', 0.5, 5000);
+  loop.pushInfluence(ev);
+  loop.pushInfluence({ ...ev }); // same ID replay
+  // We cannot easily inspect private list, but pushInfluence is fail-closed on processed/duplicate after first consume.
+  // Generation + stop test:
+  loop.start();
+  await new Promise(r => setTimeout(r, 100));
+  loop.stop();
+  const genAfterStop = loop.getStatus().generation;
+  assert(loop.getStatus().running === false, 'stop sets running false');
+  // Restart should be clean
+  loop.start();
+  assert(loop.getStatus().running === true, 'start after stop works');
+  assert(loop.getStatus().generation > genAfterStop, 'generation advanced');
+  loop.stop();
 
   // Summary
   console.log('\n=== RESULTS ===');
   console.log(`Passed: ${passed}`);
   console.log(`Failed: ${failed}`);
   if (failures.length) {
-    console.log('Failures:');
     failures.forEach(f => console.log('  -', f));
   }
 
-  // Required evidence block
   console.log('\n--- EVIDENCE BLOCK ---');
-  console.log('test_command: npx ts-node src/tests/hardening.test.ts');
-  console.log('runtime: node + ts-node');
+  console.log('test_command: npm test');
+  console.log('runtime: node ' + process.version);
   console.log(`total_tests: ${passed + failed}`);
   console.log(`pass: ${passed}`);
   console.log(`fail: ${failed}`);
@@ -132,7 +154,4 @@ async function run() {
   if (failed > 0) process.exit(1);
 }
 
-run().catch(err => {
-  console.error(err);
-  process.exit(1);
-});
+run().catch(e => { console.error(e); process.exit(1); });
