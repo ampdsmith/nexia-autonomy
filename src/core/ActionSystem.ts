@@ -1,10 +1,13 @@
 import { ActionId, Intention, ActionResult, NeedType, BodyState } from './types';
+import { validateExternalConsent, ExternalConsentDecision } from './ConsentBoundary';
 
 /**
- * ActionSystem
- * Executes intentions produced by free cognition.
- * Provides feedback (success/partial/failure + need deltas) back to the mind.
- * Consent checks for multi-resident intimate / social actions.
+ * ActionSystem (hardened donor version)
+ *
+ * Executes intentions. Provides feedback.
+ * All interpersonal and intimate actions are fail-closed.
+ * This donor never authorizes touch or intimacy from internal need scores
+ * or from a local capability boolean.
  */
 export class ActionSystem {
   private body: BodyState;
@@ -50,51 +53,71 @@ export class ActionSystem {
         return { intentionId: intention.id, success: false, partial: false, message: 'Already upright.' };
 
       case 'eat':
-        return this.applyNeedRelief(intention, { hunger: -35, energy: -5 });
+        // STUB: no real inventory or food object check yet
+        return this.applyNeedRelief(intention, { hunger: -35, energy: -5 }, 'STUB: eat succeeded without inventory or food validation');
 
       case 'drink':
-        return this.applyNeedRelief(intention, { thirst: -40, bladder: +8 });
+        // STUB: no real water source check yet
+        return this.applyNeedRelief(intention, { thirst: -40, bladder: +8 }, 'STUB: drink succeeded without source validation');
 
       case 'useRestroom':
-        return this.applyNeedRelief(intention, { bladder: -70 });
+        // STUB: no facility check yet
+        return this.applyNeedRelief(intention, { bladder: -70 }, 'STUB: restroom use succeeded without facility validation');
 
       case 'nap':
         this.body.posture = 'lying';
-        return this.applyNeedRelief(intention, { energy: -45, comfort: -10 });
+        return this.applyNeedRelief(intention, { energy: -45, comfort: -10 }, 'STUB: nap succeeded without environment suitability check');
 
       case 'bathe':
-        return this.applyNeedRelief(intention, { hygiene: -50, comfort: -5 });
+        // STUB: no facility check yet
+        return this.applyNeedRelief(intention, { hygiene: -50, comfort: -5 }, 'STUB: bathe succeeded without facility validation');
 
       case 'brushTeeth':
-        return this.applyNeedRelief(intention, { hygiene: -15 });
+        return this.applyNeedRelief(intention, { hygiene: -15 }, 'STUB: brushTeeth');
 
       case 'combHair':
-        return this.applyNeedRelief(intention, { hygiene: -8, comfort: -3 });
+        return this.applyNeedRelief(intention, { hygiene: -8, comfort: -3 }, 'STUB: combHair');
 
       case 'dress':
       case 'undress':
-        // Clothing state would be updated here with proper inventory system
-        return { intentionId: intention.id, success: true, partial: false, message: `${action} completed.` };
+        // STUB: clothing state not fully modeled
+        return {
+          intentionId: intention.id,
+          success: true,
+          partial: true,
+          message: `STUB: ${action} reported success but clothing inventory is not yet fully implemented.`,
+        };
 
       case 'cook':
-        return { intentionId: intention.id, success: true, partial: false, message: 'Prepared food.', newStateHints: { purpose: -5, hunger: -5 } };
+        // STUB: no ingredients or kitchen validation
+        return {
+          intentionId: intention.id,
+          success: true,
+          partial: true,
+          message: 'STUB: cook reported success without ingredients or facility validation.',
+          newStateHints: { purpose: -5, hunger: -5 },
+        };
 
       case 'work':
-        return this.applyNeedRelief(intention, { purpose: -25, energy: +8, curiosity: -5 });
+        return this.applyNeedRelief(intention, { purpose: -25, energy: +8, curiosity: -5 }, 'STUB: work');
 
+      // Interpersonal and intimate actions — fail-closed donor boundary
       case 'hug':
       case 'touch':
       case 'kiss':
       case 'grab':
-        // In multi-resident, consent would be checked against target Resident
-        return this.applyNeedRelief(intention, { social: -20, intimacy: -15, comfort: -5 });
+      case 'intimate': {
+        const externalDecision = (parameters?.externalConsent as ExternalConsentDecision) || null;
+        const purpose = action === 'intimate' ? 'intimate' : action;
+        const validation = validateExternalConsent(externalDecision, purpose);
 
-      case 'intimate':
-        // Strict consent gate in production multi-resident mode
-        if (!this.body.isIntimateCapable) {
-          return { intentionId: intention.id, success: false, partial: false, message: 'Not currently capable.' };
-        }
-        return this.applyNeedRelief(intention, { intimacy: -60, social: -15, energy: +12, hygiene: +10 });
+        return {
+          intentionId: intention.id,
+          success: false,
+          partial: false,
+          message: `[FAIL-CLOSED] ${validation.message} (status: ${validation.status})`,
+        };
+      }
 
       case 'idle':
       case 'observe':
@@ -109,26 +132,30 @@ export class ActionSystem {
   }
 
   private locomote(intention: Intention): ActionResult {
+    // STUB: location is a string rewrite only. No physics, collision, or pathfinding.
     const dest = (intention.parameters?.destination as string) || intention.target || 'nearby';
     this.body.location = dest;
     this.body.posture = 'standing';
-    // Energy cost scales with action intensity
     const cost = intention.action === 'run' ? 8 : intention.action === 'jump' ? 6 : 3;
     return {
       intentionId: intention.id,
       success: true,
-      partial: false,
-      message: `${intention.action} to ${dest}`,
+      partial: true,
+      message: `STUB: ${intention.action} to ${dest} (string location only, no physics)`,
       newStateHints: { energy: cost, curiosity: -2 },
     };
   }
 
-  private applyNeedRelief(intention: Intention, deltas: Partial<Record<NeedType, number>>): ActionResult {
+  private applyNeedRelief(
+    intention: Intention,
+    deltas: Partial<Record<NeedType, number>>,
+    note: string
+  ): ActionResult {
     return {
       intentionId: intention.id,
       success: true,
-      partial: false,
-      message: `${intention.action} completed.`,
+      partial: true,
+      message: note,
       newStateHints: deltas,
     };
   }
