@@ -2,14 +2,12 @@ import { Intention, ActionResult, BodyState, ActionLifecycle } from './types';
 import { validateExternalConsent, ExternalConsentDecision } from './ConsentBoundary';
 
 /**
- * ActionSystem (correction cycle)
- *
- * Unimplemented actions return lifecycle NOT_IMPLEMENTED,
- * success=false, partial=false, and perform zero body or need mutation.
- * Implementation maturity is never encoded as Resident success.
+ * ActionSystem
+ * Unimplemented actions: NOT_IMPLEMENTED, success=false, partial=false, zero mutation.
  */
 export class ActionSystem {
   private body: BodyState;
+  private actionCount = 0; // for stop-proof tests
 
   constructor(initialBody: BodyState) {
     this.body = { ...initialBody };
@@ -19,7 +17,12 @@ export class ActionSystem {
     return { ...this.body };
   }
 
+  getActionCount(): number {
+    return this.actionCount;
+  }
+
   async execute(intention: Intention): Promise<ActionResult> {
+    this.actionCount += 1;
     const { action } = intention;
 
     if (this.body.posture === 'falling' && action !== 'getUp') {
@@ -27,7 +30,6 @@ export class ActionSystem {
     }
 
     switch (action) {
-      // Fully local safety actions that can run without external world
       case 'fall':
         this.body.posture = 'falling';
         return this.ok(intention.id, 'COMPLETED', 'Fell.');
@@ -44,9 +46,9 @@ export class ActionSystem {
         return this.ok(intention.id, 'COMPLETED', 'Observing / resting in place.');
 
       case 'speak':
-        return this.ok(intention.id, 'COMPLETED', `Spoke: ${(intention.parameters?.text as string) ?? '...'}`);
+        // No real output channel yet; do not echo private text
+        return this.notImplemented(intention.id, 'speak');
 
-      // Interpersonal — always fail-closed until canonical consent exists
       case 'hug':
       case 'touch':
       case 'kiss':
@@ -64,8 +66,6 @@ export class ActionSystem {
         };
       }
 
-      // Everything else is still NOT_IMPLEMENTED in this donor.
-      // No body mutation. No need mutation.
       case 'walk':
       case 'run':
       case 'hop':
@@ -90,23 +90,11 @@ export class ActionSystem {
   }
 
   private ok(intentionId: string, lifecycle: ActionLifecycle, message: string): ActionResult {
-    return {
-      intentionId,
-      lifecycle,
-      success: true,
-      partial: false,
-      message,
-    };
+    return { intentionId, lifecycle, success: true, partial: false, message };
   }
 
   private fail(intentionId: string, lifecycle: ActionLifecycle, message: string): ActionResult {
-    return {
-      intentionId,
-      lifecycle,
-      success: false,
-      partial: false,
-      message,
-    };
+    return { intentionId, lifecycle, success: false, partial: false, message };
   }
 
   private notImplemented(intentionId: string, action: string): ActionResult {
@@ -115,7 +103,7 @@ export class ActionSystem {
       lifecycle: 'NOT_IMPLEMENTED',
       success: false,
       partial: false,
-      message: `NOT_IMPLEMENTED: ${action} has no real embodiment, facility, inventory, or physics in this donor. Zero state mutation.`,
+      message: `NOT_IMPLEMENTED: ${action}. Zero state mutation.`,
     };
   }
 }
