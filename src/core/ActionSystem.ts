@@ -1,22 +1,38 @@
 import { ACTION_IDS, Intention, ActionResult, BodyState, ActionLifecycle } from './types';
-import { validateExternalConsent, ExternalConsentDecision } from './ConsentBoundary';
+import { ConsentReplayLedger, validateExternalConsent, ExternalConsentDecision } from './ConsentBoundary';
 
 function cloneBody(body: BodyState): BodyState {
   return { ...body, clothing: [...body.clothing], inventory: [...body.inventory] };
+}
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('ACTION_ABORTED');
+}
+
+export interface ActionSystemOptions {
+  expectedConsentAuthorityId?: string;
+  expectedConsentScope?: string;
+  consentReplayLimit?: number;
 }
 
 export class ActionSystem {
   private body: BodyState;
   private actionCount = 0;
+  private readonly expectedConsentAuthorityId: string;
+  private readonly expectedConsentScope: string;
+  private readonly consentReplayLedger: ConsentReplayLedger;
 
-  constructor(initialBody: BodyState, private readonly residentId: string) {
+  constructor(initialBody: BodyState, private readonly residentId: string, options: ActionSystemOptions = {}) {
     this.body = cloneBody(initialBody);
+    this.expectedConsentAuthorityId = options.expectedConsentAuthorityId ?? 'NEXA_INTIMACY_CANONICAL_AUTHORITY';
+    this.expectedConsentScope = options.expectedConsentScope ?? 'resident-sensitive-contact';
+    this.consentReplayLedger = new ConsentReplayLedger(options.consentReplayLimit ?? 500);
   }
 
   getBody(): BodyState { return cloneBody(this.body); }
   getActionCount(): number { return this.actionCount; }
 
-  async execute(intention: Intention): Promise<ActionResult> {
+  async execute(intention: Intention, signal?: AbortSignal): Promise<ActionResult> {
+    throwIfAborted(signal);
     this.actionCount += 1;
     if (!intention || !ACTION_IDS.includes(intention.action)) {
       return this.fail(intention?.id ?? 'unknown', 'FAILED', 'Invalid action request.');
@@ -27,9 +43,13 @@ export class ActionSystem {
     }
 
     switch (action) {
-      case 'fall': this.body.posture = 'falling'; return this.ok(intention.id, 'COMPLETED', 'Fell.');
+      case 'fall':
+        throwIfAborted(signal);
+        this.body.posture = 'falling';
+        return this.ok(intention.id, 'COMPLETED', 'Fell.');
       case 'getUp':
         if (this.body.posture === 'falling' || this.body.posture === 'lying') {
+          throwIfAborted(signal);
           this.body.posture = 'standing';
           return this.ok(intention.id, 'COMPLETED', 'Got back up.');
         }
@@ -47,10 +67,13 @@ export class ActionSystem {
         const externalDecision = (intention.parameters?.externalConsent as ExternalConsentDecision) || null;
         const validation = validateExternalConsent(externalDecision, {
           purpose: action === 'intimate' ? 'intimate' : action,
+          scope: this.expectedConsentScope,
           actorId: this.residentId,
           targetId: target,
           actionId: action,
-        });
+          intentionId: intention.id,
+          expectedAuthorityId: this.expectedConsentAuthorityId,
+        }, this.consentReplayLedger);
         return this.fail(intention.id, 'FAILED', `[FAIL-CLOSED] ${validation.message} (status: ${validation.status})`);
       }
       case 'walk': case 'run': case 'hop': case 'jump': case 'skip':
