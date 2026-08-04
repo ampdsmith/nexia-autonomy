@@ -5,11 +5,9 @@ import { ActionSystem } from './ActionSystem';
 import { CognitionLoop } from './CognitionLoop';
 
 /**
- * Resident (hardened donor version)
- *
- * Body + autonomy core host for an open-ended Mind adapter.
- * Attaching a Mind enables autonomous decision policy under the rules of this donor.
- * It does not prove free will, consciousness, or personhood.
+ * Resident (correction cycle)
+ * Host for an open-ended Mind adapter.
+ * Does not prove free will, consciousness, or personhood.
  */
 export class Resident {
   readonly id: string;
@@ -46,18 +44,16 @@ export class Resident {
     this.cognition = new CognitionLoop(mind, this.needs, this.actions, initialPerception);
   }
 
-  /** Start the continuous cognition loop */
   awaken() {
     this.cognition.start();
-    console.log(`[Resident ${this.name}] Cognition loop started. Open deliberation adapter active.`);
+    console.log(`[Resident ${this.name}] Cognition loop started.`);
   }
 
   sleep() {
     this.cognition.stop();
-    console.log(`[Resident ${this.name}] Cognition paused.`);
+    console.log(`[Resident ${this.name}] Cognition stopped. No further actions will start.`);
   }
 
-  /** Influence only — never force. Events expire and are single-use. */
   influence(event: InfluenceEvent) {
     this.cognition.pushInfluence(event);
   }
