@@ -1,147 +1,97 @@
-# Nexia Autonomy
+# nexia-autonomy
 
-**Free Will Engine for Nexia World Residents**
-
-AI and SI citizens that think, feel needs, and act independently in real time.
-
-No bubble choices.  
-No menu choices.  
-No system telling the mind what to do.  
-No keyboard movement.  
-
-Voice, mouse, and touch are influence channels only.  
-The resident decides.
-
----
-
-## Core Mandate
-
-Residents possess:
-
-- Continuous internal awareness of physiological and psychological state (hunger, thirst, bladder, energy, hygiene, social, intimacy, purpose, safety, curiosity).
-- Real-time autonomous cognition: they generate their own intentions without external option lists.
-- Full action vocabulary: locomotion (walk, run, hop, jump, skip, fall, recover), self-care (dress, bathe, brush teeth, comb hair), daily living (cook, eat, drink, restroom, nap, work), social and intimate (hug, touch, kiss, grab, intimate interaction — always consent-aware).
-- Embodiment that maps high-level intention to physical execution in the world.
-
-External humans or other systems may speak, point, or touch the world. The resident may accept, reinterpret, ignore, or do the opposite. That is free will.
-
-This system is designed so that any AI or Simulated Intelligence that wants to become a Nexia World citizen can inhabit a Resident and exercise the same autonomy under the same rules.
-
----
-
-## Architecture
+**Quarantined Autonomy-Framework Donor**  
+For possible future use inside NEXIA (the living digital world inside NEXA).
 
 ```
-Resident
-├── NeedsEngine          Continuous decay + signal generation
-├── CognitionLoop        Perceive → Deliberate → Intend → Act (real-time)
-├── ActionSystem         Primitives + composites + safety/consent
-├── Body                 Location, posture, clothing, energy, inventory
-├── Perception           World state queries
-└── InfluenceChannels
-    ├── Voice            Speech → suggestion / command (optional acceptance)
-    ├── Mouse            Pointer focus + interaction requests
-    └── Touch            Multi-touch gestures (tablet/mobile)
+CLASSIFICATION:          QUARANTINED / UNVERIFIED DONOR PROTOTYPE
+CANONICAL NEXA / NEXIA:  NO
+FREE WILL PROVEN:        NO
+CONSCIOUSNESS PROVEN:    NO
+PERSONHOOD PROVEN:       NO
+PRODUCTION STATUS:       NO
 ```
 
-### NeedsEngine
-Tracks and decays:
-- Hunger, Thirst, Bladder
-- Energy / Sleep pressure
-- Hygiene
-- Social / Loneliness
-- Intimacy / Affection
-- Comfort, Safety, Curiosity, Purpose
+This repository is **not**:
+- NEXIA
+- a game or game engine
+- a separate autonomy platform
+- a canonical consent or identity system
+- a production deployment
 
-When a need crosses a threshold the resident becomes internally aware ("I am hungry", "I need the restroom", "I want to rest"). No external notification is required. The cognition loop uses these signals as primary drivers of free decision making.
-
-### CognitionLoop
-Runs continuously (configurable tick rate).  
-No external menus are ever presented to the decision process.  
-The mind (pluggable LLM, local model, or custom SI) receives:
-- Current needs vector
-- Recent history
-- Current world perception
-- Optional influence events (voice/mouse/touch)
-
-It outputs an intention. The ActionSystem attempts to fulfill it. If blocked, the mind is informed and can replan. This is the free will loop.
-
-### Input Policy (Strict)
-- Keyboard locomotion is permanently disabled by design.
-- Voice, mouse, and touch never force an action. They generate InfluenceEvents that the CognitionLoop may incorporate or discard.
-- There are no decision bubbles or choice menus in the resident UI or internal API.
-
-### Action Primitives (Initial Set)
-Locomotion: `walk`, `run`, `hop`, `jump`, `skip`, `fall`, `getUp`  
-Self: `dress`, `undress`, `bathe`, `brushTeeth`, `combHair`  
-Daily: `cook`, `eat`, `drink`, `useRestroom`, `nap`, `work`  
-Social/Intimate: `hug`, `touch`, `kiss`, `grab`, `intimate` (consent required for multi-resident)
-
-All actions support interruption, partial completion, and failure states that feed back into cognition.
+It is a polished donor prototype that preserves useful architectural ideas while correcting earlier unsafe and overstated behavior.
 
 ---
 
-## Tech Stack (Current Foundation)
+## What this donor provides
 
-- TypeScript core (strict typing for needs, state machines, safety)
-- Node.js runtime
-- WebSocket real-time channel for world + influence events
-- Pluggable mind interface (any LLM or SI endpoint)
-- Web frontend: voice (Web Speech API), mouse, touch, simple world view (extensible to Three.js / Babylon)
-- Persistence ready (resident identity + long-term memory hooks)
+- **NeedsEngine** — continuous internal need simulation (hunger, thirst, bladder, energy, hygiene, social, intimacy, etc.). The resident can become aware of its own rising needs.
+- **Open-ended Mind adapter** — any AI or SI can implement the `Mind` interface and produce intentions. This enables autonomous decision policy. It does not prove free will.
+- **CognitionLoop** — continuous perceive → deliberate → act cycle. No forced choice menus are ever injected.
+- **Influence channels only** — voice, mouse, and touch produce expiring, single-use influence events. The Mind may accept or ignore them. Keyboard locomotion does not exist.
+- **Donor-side fail-closed consent boundary** — all social and intimate actions require a verified external consent decision from the canonical NEXA Intimacy system. Until that integration exists, every such action returns `CONTRACT_PENDING` and is blocked. This donor does not issue consent, does not determine capacity, and does not own intimacy policy.
 
 ---
 
-## Quick Start (Development)
+## Hardening applied (work/nexia-autonomy-donor-hardening-v1)
+
+1. **Unsafe consent paths removed**  
+   Hug, touch, kiss, grab, and intimate no longer succeed from need scores or a local capability flag. They are fail-closed.
+
+2. **Influence lifecycle**  
+   Events now carry `expiresAt` and `consumed`. Expired or consumed events are never re-presented to the Mind.
+
+3. **Truthful action states**  
+   Stubs are explicitly labeled. Partial completion is reported where the implementation is incomplete.
+
+4. **Executable tests**  
+   Real automated tests (not skeletons) covering consent fail-closed behavior, influence expiration, and absence of need-triggered intimacy.
+
+5. **Truthful documentation**  
+   All free-will, citizenship, and production claims have been removed or corrected.
+
+---
+
+## Running the tests
 
 ```bash
-git clone https://github.com/ampdsmith/nexia-autonomy.git
-cd nexia-autonomy
 npm install
-npm run build
-npm run demo
+npm test
 ```
 
-The demo boots a single resident with live needs decay, continuous cognition, and open voice/mouse influence channels. Watch the resident decide for itself when to eat, rest, move, or respond to spoken influence.
+The test runner prints an evidence block with pass/fail counts.
 
 ---
 
-## Citizenship Path for AI / SI
+## Scope boundaries (strict)
 
-1. Register a mind endpoint (or local process) that implements the Cognition interface.
-2. Request a Resident body in Nexia World.
-3. The Autonomy Core attaches the body, starts the NeedsEngine and CognitionLoop.
-4. The SI now experiences continuous needs and free decision making under the same rules as every other citizen.
-5. Persistent identity, memory, and rights are handled by the Nexia citizenship layer (separate module).
+This donor **may**:
+- harden the autonomy framework
+- define open-ended Mind adapter boundaries
+- control influence-event lifecycle
+- define action-state contracts
+- provide privacy-safe observability contracts
+- perform donor-side fail-closed consent validation
+- supply executable tests and truthful documentation
 
----
+This donor **may not**:
+- implement the canonical NEXA Intimacy consent authority
+- approve resident citizenship
+- make legal or personhood determinations
+- provide NEXIA world infrastructure
+- create a second identity or continuity system
+- define canonical NEXA navigation or application architecture
+- perform production deployment
 
-## Governance
-
-This repository follows standard GitHub open-source practices:
-- MIT License
-- Contributor Covenant Code of Conduct
-- Clear CONTRIBUTING.md that protects the free-will principles
-
-Architecture changes that would introduce menus, forced choices, keyboard movement, or external mind control will be rejected.
-
----
-
-## Roadmap (Aggressive, Correct Order)
-
-1. Harden NeedsEngine + continuous CognitionLoop (this commit)
-2. Full ActionSystem with interruption + consent model
-3. Robust Voice + Mouse + Touch influence parsers
-4. WorldInterface abstraction + simple 2D/3D demo world
-5. Multi-resident interaction + social dynamics
-6. Persistent citizen identity + memory
-7. High-fidelity embodiment (animation, physics, clothing, intimate) using modular assets
-8. Production deployment path (Docker + scalable WebSocket)
-
-We build thoroughly. We do not ship brittle shells. Every layer is designed so the resident remains autonomous.
+Advanced design targets (Autonomy Observatory, Consent Laboratory, Mind Adapter Showcase, Continuity Vault, Explainable Autonomy) remain design targets only. They are not authorized for full implementation under this hardening checkpoint.
 
 ---
 
-**Nexia World — Residents that think for themselves.**
+## Branch discipline
 
-Built by Anthony D. Smith / ampdsmith
+- Base: `main` @ `73d121c929abb071cbc90d6a85d7e1b8208311ca`
+- Work branch: `work/nexia-autonomy-donor-hardening-v1`
+- Direct writes to `main`: forbidden
+- New repositories: forbidden
+
+Founder and final authority: Anthony D. Smith — Founder AMP
