@@ -1,20 +1,17 @@
 /**
- * Nexia Autonomy Donor Demo
- * Boots a single Resident with continuous cognition loop.
- * Demonstrates needs awareness, open deliberation, and optional expiring influence.
- *
+ * Nexia Autonomy Donor Demo (correction cycle)
  * Run: npm run demo
  */
 
 import { Resident } from './core/Resident';
-import { SimpleAutonomousMind } from './minds/SimpleAutonomousMind';
+import { DeterministicBaselineMind } from './minds/DeterministicBaselineMind';
 import { createVoiceInfluence } from './input/InfluenceChannels';
 
 async function main() {
   console.log('=== NEXIA AUTONOMY DONOR DEMO ===');
-  console.log('Open deliberation adapter active. No menus. No forced choices.\n');
+  console.log('Deterministic baseline policy. Open deliberation interface available.\n');
 
-  const mind = new SimpleAutonomousMind();
+  const mind = new DeterministicBaselineMind();
   const resident = new Resident('Ava', mind, 'home');
 
   resident.awaken();
@@ -28,21 +25,21 @@ async function main() {
   }, 4000);
 
   setTimeout(() => {
-    console.log('\n>>> External voice influence: "Hey, maybe walk to the kitchen"');
+    console.log('\n>>> Voice influence: "Hey, maybe walk to the kitchen"');
     resident.influence(createVoiceInfluence('Hey, maybe walk to the kitchen', 0.7));
   }, 12000);
 
   setTimeout(() => {
-    console.log('\n>>> External voice influence: "You look tired, rest if you want"');
-    resident.influence(createVoiceInfluence('You look tired, rest if you want', 0.55));
-  }, 28000);
+    console.log('\n>>> Voice influence (negated — should be rejected): "don\'t walk"');
+    resident.influence(createVoiceInfluence("don't walk", 0.8));
+  }, 20000);
 
   setTimeout(() => {
     clearInterval(statusInterval);
     resident.sleep();
     console.log('\n=== Demo complete. ===');
     process.exit(0);
-  }, 45000);
+  }, 35000);
 }
 
 main().catch(console.error);
