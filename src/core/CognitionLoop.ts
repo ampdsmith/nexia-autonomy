@@ -1,5 +1,6 @@
 import {
   ACTION_IDS, Mind, CognitionContext, InfluenceEvent, Perception, ActionResult, DeliberationResult, Intention,
+  CognitionControl, CognitionControlState,
   INFLUENCE_TTL_MIN_MS, INFLUENCE_TTL_MAX_MS, INFLUENCE_FUTURE_SKEW_MAX_MS,
   INFLUENCE_CONTENT_MAX_BYTES, INFLUENCE_PROVENANCE_MAX_LENGTH,
   INTENTION_MAX_AGE_MS, INTENTION_FUTURE_SKEW_MAX_MS, INTENTION_REASONING_MAX_LENGTH,
@@ -9,20 +10,21 @@ import { NeedsEngine } from './NeedsEngine';
 import { ActionSystem } from './ActionSystem';
 
 export type InfluenceIngestionStatus =
-  | 'ACCEPTED' | 'REJECTED_DUPLICATE_PENDING' | 'REJECTED_PROCESSED'
+  | 'ACCEPTED' | 'REJECTED_DUPLICATE_PENDING' | 'REJECTED_REPLAY' | 'REJECTED_PROCESSED'
   | 'REJECTED_CONSUMED' | 'REJECTED_MALFORMED' | 'REJECTED_WRONG_RESIDENT'
   | 'REJECTED_EXPIRED' | 'REJECTED_FUTURE_TIMESTAMP' | 'REJECTED_QUEUE_FULL';
 
 export interface InfluenceIngestionResult { status: InfluenceIngestionStatus; eventId: string; }
+export interface ResumeRequest {
+  targetResidentId: string;
+  actorId: string;
+  authorityReference: string;
+  requestedAt: number;
+}
+export type ControlAuthorizer = (request: Readonly<ResumeRequest>) => boolean | Promise<boolean>;
 
 function clonePerception(p: Perception): Perception {
-  return {
-    timestamp: p.timestamp,
-    location: p.location,
-    nearbyObjects: [...p.nearbyObjects],
-    nearbyResidents: [...p.nearbyResidents],
-    environmentNotes: [...p.environmentNotes],
-  };
+  return { timestamp: p.timestamp, location: p.location, nearbyObjects: [...p.nearbyObjects], nearbyResidents: [...p.nearbyResidents], environmentNotes: [...p.environmentNotes] };
 }
 function cloneInfluence(event: InfluenceEvent): InfluenceEvent {
   return { ...event, content: typeof event.content === 'string' ? event.content : JSON.parse(JSON.stringify(event.content)) };
@@ -40,16 +42,30 @@ function byteLength(value: unknown): number {
   try { return Buffer.byteLength(typeof value === 'string' ? value : JSON.stringify(value), 'utf8'); }
   catch { return Number.POSITIVE_INFINITY; }
 }
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+}
+function boundedOptionalString(value: unknown, max = 200): boolean {
+  return value === undefined || (typeof value === 'string' && value.trim().length > 0 && value.length <= max);
+}
+function hasOnlyKeys(value: Record<string, unknown>, allowed: string[]): boolean {
+  return Object.keys(value).every((key) => allowed.includes(key));
+}
 
 export class CognitionLoop {
   private influences: InfluenceEvent[] = [];
   private processedIds = new Set<string>();
+  private seenInfluenceIds = new Set<string>();
   private processedIntentionIds = new Set<string>();
   private recentResults: ActionResult[] = [];
   private running = false;
   private generation = 0;
+  private controlState: CognitionControlState = 'ACTIVE';
   private lastPerception: Perception;
+  private lastBoundaryRejection: string | null = null;
+  private readonly activeControllers = new Set<AbortController>();
   private readonly MAX_PROCESSED = 200;
+  private readonly MAX_SEEN = 1_000;
   private readonly MAX_QUEUE = 20;
   private readonly MAX_INTENTIONS = 200;
 
@@ -62,6 +78,7 @@ export class CognitionLoop {
     private readonly tickMs = 1500,
     private readonly deliberationTimeoutMs = 1_000,
     private readonly actionTimeoutMs = 1_000,
+    private readonly controlAuthorizer: ControlAuthorizer = () => false,
   ) {
     this.lastPerception = this.validateAndClonePerception(initialPerception);
     if (!residentId.trim()) throw new TypeError('residentId is required.');
@@ -70,8 +87,9 @@ export class CognitionLoop {
   pushInfluence(event: InfluenceEvent): InfluenceIngestionResult {
     const id = event?.id ?? '';
     if (!id || typeof id !== 'string' || id.length > 200) return { status: 'REJECTED_MALFORMED', eventId: id };
-    if (this.processedIds.has(id)) return { status: 'REJECTED_PROCESSED', eventId: id };
     if (this.influences.some((e) => e.id === id)) return { status: 'REJECTED_DUPLICATE_PENDING', eventId: id };
+    if (this.seenInfluenceIds.has(id)) return { status: 'REJECTED_REPLAY', eventId: id };
+    if (this.processedIds.has(id)) return { status: 'REJECTED_PROCESSED', eventId: id };
     if (event.consumed) return { status: 'REJECTED_CONSUMED', eventId: id };
     const malformed = this.validateEventShape(event);
     if (malformed) return { status: malformed, eventId: id };
@@ -81,6 +99,8 @@ export class CognitionLoop {
     if (event.expiresAt <= now) return { status: 'REJECTED_EXPIRED', eventId: id };
     if (this.influences.length >= this.MAX_QUEUE) return { status: 'REJECTED_QUEUE_FULL', eventId: id };
     this.influences.push(cloneInfluence({ ...event, consumed: false }));
+    this.seenInfluenceIds.add(id);
+    this.trimSet(this.seenInfluenceIds, this.MAX_SEEN);
     return { status: 'ACCEPTED', eventId: id };
   }
 
@@ -94,8 +114,32 @@ export class CognitionLoop {
     if (typeof event.targetResidentId !== 'string' || !event.targetResidentId.trim() || event.targetResidentId.length > 200) return 'REJECTED_MALFORMED';
     if (typeof event.provenance !== 'string' || !event.provenance.trim() || event.provenance.length > INFLUENCE_PROVENANCE_MAX_LENGTH) return 'REJECTED_MALFORMED';
     if (byteLength(event.content) === 0 || byteLength(event.content) > INFLUENCE_CONTENT_MAX_BYTES) return 'REJECTED_MALFORMED';
-    if (event.channel === 'voice' && (typeof event.content !== 'string' || !event.content.trim())) return 'REJECTED_MALFORMED';
-    return null;
+    if (event.channel === 'voice') return typeof event.content === 'string' && event.content.trim() ? null : 'REJECTED_MALFORMED';
+    if (event.channel === 'mouse') return this.validateMousePayload(event.content) ? null : 'REJECTED_MALFORMED';
+    if (event.channel === 'touch') return this.validateTouchPayload(event.content) ? null : 'REJECTED_MALFORMED';
+    return 'REJECTED_MALFORMED';
+  }
+
+  private validateMousePayload(content: unknown): boolean {
+    if (!isPlainObject(content) || !hasOnlyKeys(content, ['x', 'y', 'targetObject', 'button'])) return false;
+    if (!Number.isFinite(content.x) || !Number.isFinite(content.y)) return false;
+    if (!boundedOptionalString(content.targetObject)) return false;
+    return content.button === undefined || (Number.isInteger(content.button) && Number(content.button) >= 0 && Number(content.button) <= 5);
+  }
+
+  private validateTouchPayload(content: unknown): boolean {
+    if (!isPlainObject(content) || !hasOnlyKeys(content, ['touches', 'gesture', 'targetObject'])) return false;
+    if (!Array.isArray(content.touches) || content.touches.length < 1 || content.touches.length > 10) return false;
+    if (!boundedOptionalString(content.gesture) || !boundedOptionalString(content.targetObject)) return false;
+    const ids = new Set<number>();
+    for (const point of content.touches) {
+      if (!isPlainObject(point) || !hasOnlyKeys(point, ['id', 'x', 'y'])) return false;
+      if (!Number.isInteger(point.id) || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
+      const id = Number(point.id);
+      if (ids.has(id)) return false;
+      ids.add(id);
+    }
+    return true;
   }
 
   updatePerception(p: Perception) { this.lastPerception = this.validateAndClonePerception(p); }
@@ -110,17 +154,40 @@ export class CognitionLoop {
     return clonePerception(p);
   }
 
-  start() {
-    if (this.running) return;
+  start(): boolean {
+    if (this.running || this.controlState !== 'ACTIVE') return false;
     this.generation += 1;
     this.running = true;
     void this.loop(this.generation);
+    return true;
   }
 
-  stop({ clearPending = true }: { clearPending?: boolean } = {}) {
+  stop({ clearPending = true, persistent = false }: { clearPending?: boolean; persistent?: boolean } = {}) {
     this.running = false;
     this.generation += 1;
+    this.abortActiveOperations(new Error('COGNITION_STOPPED'));
     if (clearPending) this.influences = [];
+    if (persistent) this.controlState = 'STOPPED';
+  }
+
+  async resume(request: ResumeRequest): Promise<boolean> {
+    if (this.controlState === 'ACTIVE') return this.start();
+    if (!request || request.targetResidentId !== this.residentId || typeof request.actorId !== 'string' || !request.actorId.trim()
+        || typeof request.authorityReference !== 'string' || !request.authorityReference.trim()
+        || !Number.isFinite(request.requestedAt) || Math.abs(Date.now() - request.requestedAt) > 30_000) return false;
+    let authorized = false;
+    try { authorized = await this.controlAuthorizer(freezeDeep({ ...request })); } catch { authorized = false; }
+    if (!authorized) return false;
+    this.controlState = 'ACTIVE';
+    return this.start();
+  }
+
+  private suspendFromControl(control: Exclude<CognitionControl, 'NONE'>): void {
+    this.controlState = control === 'PAUSE' ? 'PAUSED' : 'STOPPED';
+    this.running = false;
+    this.generation += 1;
+    this.abortActiveOperations(new Error(`COGNITION_${this.controlState}`));
+    this.influences = [];
   }
 
   private getActiveInfluences(): InfluenceEvent[] {
@@ -130,10 +197,11 @@ export class CognitionLoop {
   }
 
   private trimSet(set: Set<string>, max: number) {
-    if (set.size <= max) return;
-    const values = Array.from(set);
-    set.clear();
-    for (const id of values.slice(values.length - max)) set.add(id);
+    while (set.size > max) {
+      const first = set.values().next().value as string | undefined;
+      if (first === undefined) break;
+      set.delete(first);
+    }
   }
 
   private markProcessed(ids: string[]) {
@@ -153,45 +221,67 @@ export class CognitionLoop {
     return { ...intention, parameters: intention.parameters ? JSON.parse(JSON.stringify(intention.parameters)) : undefined };
   }
 
+  private rejectEnvelope(reason: string): null {
+    this.lastBoundaryRejection = reason;
+    return null;
+  }
+
   private sanitizeEnvelope(result: DeliberationResult, active: InfluenceEvent[], now: number): DeliberationResult | null {
     if (!result || !Array.isArray(result.acceptedInfluenceIds) || !Array.isArray(result.rejectedInfluenceIds)
-        || !Array.isArray(result.deferredInfluenceIds)) return null;
+        || !Array.isArray(result.deferredInfluenceIds)) return this.rejectEnvelope('MALFORMED_DELIBERATION_ENVELOPE');
+    const arrays = [result.acceptedInfluenceIds, result.rejectedInfluenceIds, result.deferredInfluenceIds];
+    if (arrays.some((items) => new Set(items).size !== items.length)) return this.rejectEnvelope('DUPLICATE_DELIBERATION_IDS');
     const activeIds = new Set(active.map((e) => e.id));
     const a = new Set(result.acceptedInfluenceIds);
     const r = new Set(result.rejectedInfluenceIds);
     const d = new Set(result.deferredInfluenceIds);
-    if ([...a, ...r, ...d].some((id) => typeof id !== 'string' || !activeIds.has(id))) return null;
-    for (const id of a) if (r.has(id) || d.has(id)) return null;
-    for (const id of r) if (d.has(id)) return null;
+    if ([...a, ...r, ...d].some((id) => typeof id !== 'string' || !activeIds.has(id))) return this.rejectEnvelope('FOREIGN_DELIBERATION_ID');
+    for (const id of a) if (r.has(id) || d.has(id)) return this.rejectEnvelope('OVERLAPPING_DELIBERATION_IDS');
+    for (const id of r) if (d.has(id)) return this.rejectEnvelope('OVERLAPPING_DELIBERATION_IDS');
+    const control = result.control ?? 'NONE';
+    if (!['NONE', 'PAUSE', 'STOP'].includes(control)) return this.rejectEnvelope('INVALID_CONTROL_RESULT');
     const intention = this.validateIntention(result.intention, now);
-    if (intention === false) return null;
-    return { intention, acceptedInfluenceIds: [...a], rejectedInfluenceIds: [...r], deferredInfluenceIds: [...d] };
+    if (intention === false) return this.rejectEnvelope('INVALID_INTENTION');
+    if (control !== 'NONE' && (intention !== null || a.size < 1)) return this.rejectEnvelope('INVALID_CONTROL_BINDING');
+    this.lastBoundaryRejection = null;
+    return { intention, control, acceptedInfluenceIds: [...a], rejectedInfluenceIds: [...r], deferredInfluenceIds: [...d] };
   }
 
-  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  private abortActiveOperations(reason: Error): void {
+    for (const controller of this.activeControllers) if (!controller.signal.aborted) controller.abort(reason);
+  }
+
+  private async withAbortBoundary<T>(operation: (signal: AbortSignal) => Promise<T>, timeoutMs: number, label: string): Promise<T> {
+    const controller = new AbortController();
+    this.activeControllers.add(controller);
     let timer: NodeJS.Timeout | undefined;
-    try {
-      return await Promise.race([
-        promise,
-        new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error(`${label}_TIMEOUT`)), timeoutMs); }),
-      ]);
-    } finally { if (timer) clearTimeout(timer); }
+    const operationPromise = Promise.resolve().then(() => operation(controller.signal));
+    void operationPromise.catch(() => undefined);
+    const abortPromise = new Promise<never>((_, reject) => {
+      const rejectOnAbort = () => reject(controller.signal.reason instanceof Error ? controller.signal.reason : new Error(`${label}_ABORTED`));
+      if (controller.signal.aborted) rejectOnAbort();
+      else controller.signal.addEventListener('abort', rejectOnAbort, { once: true });
+    });
+    timer = setTimeout(() => controller.abort(new Error(`${label}_TIMEOUT`)), timeoutMs);
+    try { return await Promise.race([operationPromise, abortPromise]); }
+    finally {
+      if (timer) clearTimeout(timer);
+      this.activeControllers.delete(controller);
+    }
   }
 
   private async loop(myGeneration: number) {
-    while (this.running && this.generation === myGeneration) {
+    while (this.running && this.generation === myGeneration && this.controlState === 'ACTIVE') {
       const start = Date.now();
       const context: CognitionContext = {
-        needs: this.needs.tick(),
-        perception: clonePerception(this.lastPerception),
-        recentInfluences: this.getActiveInfluences(),
-        recentActions: this.recentResults.slice(-8).map(cloneAction),
+        needs: this.needs.tick(), perception: clonePerception(this.lastPerception),
+        recentInfluences: this.getActiveInfluences(), recentActions: this.recentResults.slice(-8).map(cloneAction),
         bodyState: this.actions.getBody(),
       };
       let result: DeliberationResult | null = null;
-      try { result = await this.withTimeout(this.mind.deliberate(freezeDeep(context)), this.deliberationTimeoutMs, 'DELIBERATION'); }
+      try { result = await this.withAbortBoundary((signal) => this.mind.deliberate(freezeDeep(context), signal), this.deliberationTimeoutMs, 'DELIBERATION'); }
       catch (err) { console.error('[CognitionLoop] Mind boundary:', err); }
-      if (!this.running || this.generation !== myGeneration) break;
+      if (!this.running || this.generation !== myGeneration || this.controlState !== 'ACTIVE') break;
 
       if (result) {
         const clean = this.sanitizeEnvelope(result, context.recentInfluences, Date.now());
@@ -202,12 +292,16 @@ export class CognitionLoop {
             if (event) event.consumed = true;
           }
           this.markProcessed(consumed);
+          if (clean.control && clean.control !== 'NONE') {
+            this.suspendFromControl(clean.control);
+            break;
+          }
           if (clean.intention) {
             this.processedIntentionIds.add(clean.intention.id);
             this.trimSet(this.processedIntentionIds, this.MAX_INTENTIONS);
             try {
-              const actionResult = await this.withTimeout(this.actions.execute(clean.intention), this.actionTimeoutMs, 'ACTION');
-              if (!this.running || this.generation !== myGeneration) break;
+              const actionResult = await this.withAbortBoundary((signal) => this.actions.execute(clean.intention as Intention, signal), this.actionTimeoutMs, 'ACTION');
+              if (!this.running || this.generation !== myGeneration || this.controlState !== 'ACTIVE') break;
               this.recentResults.push(cloneAction(actionResult));
               if (this.recentResults.length > 30) this.recentResults.shift();
               if (actionResult.success && actionResult.newStateHints) {
@@ -226,13 +320,17 @@ export class CognitionLoop {
     return {
       running: this.running,
       generation: this.generation,
+      controlState: this.controlState,
       needs: this.needs.getSnapshot(),
       body: this.actions.getBody(),
       needSignals: this.needs.describeSignals(),
       pendingInfluences: this.getActiveInfluences().length,
       processedCount: this.processedIds.size,
+      seenInfluenceCount: this.seenInfluenceIds.size,
       processedIntentionCount: this.processedIntentionIds.size,
       actionCount: this.actions.getActionCount(),
+      lastBoundaryRejection: this.lastBoundaryRejection,
+      activeOperationCount: this.activeControllers.size,
     };
   }
 }
