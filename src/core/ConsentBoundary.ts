@@ -1,24 +1,7 @@
-/**
- * Donor-side Consent Boundary (preflight only)
- *
- * THIS DONOR DOES NOT:
- * - issue canonical consent
- * - determine legal or resident capacity
- * - own NEXA Intimacy policy
- * - store public intimacy receipts
- * - replace NEXA Intimacy
- * - ever return a locally VALID authorization for execution
- */
-
+/** Donor-side consent preflight only. This module never authorizes execution. */
 export type ConsentStatus =
-  | 'CONTRACT_PENDING'
-  | 'ABSENT'
-  | 'EXPIRED'
-  | 'REVOKED'
-  | 'PAUSED'
-  | 'STOPPED'
-  | 'SOS'
-  | 'MALFORMED';
+  | 'CONTRACT_PENDING' | 'ABSENT' | 'EXPIRED' | 'REVOKED'
+  | 'PAUSED' | 'STOPPED' | 'SOS' | 'MALFORMED' | 'MISMATCH';
 
 export interface ExternalConsentDecision {
   decisionId: string;
@@ -30,69 +13,62 @@ export interface ExternalConsentDecision {
   paused: boolean;
   stopped: boolean;
   sos: boolean;
-  /** Required envelope fields for future canonical adapter */
-  actorId?: string;
-  targetId?: string;
-  actionId?: string;
-  authorityId?: string;
-  verificationToken?: string;
+  actorId: string;
+  targetId: string;
+  actionId: string;
+  authorityId: string;
+  verificationToken: string;
+}
+
+export interface ConsentExpectation {
+  purpose: string;
+  actorId: string;
+  targetId: string;
+  actionId: string;
 }
 
 export interface ConsentValidationResult {
   status: ConsentStatus;
-  allowed: boolean; // always false in this donor
+  allowed: false;
   message: string;
 }
 
-/**
- * Preflight inspection only. Execution is always blocked (CONTRACT_PENDING)
- * until canonical NEXA Intimacy integration exists.
- */
+const nonEmpty = (value: unknown, max = 256) =>
+  typeof value === 'string' && value.trim().length > 0 && value.length <= max;
+
 export function validateExternalConsent(
   decision: ExternalConsentDecision | null | undefined,
-  requiredPurpose: string
+  expected: ConsentExpectation,
+  now: number = Date.now(),
 ): ConsentValidationResult {
   if (!decision) {
-    return {
-      status: 'CONTRACT_PENDING',
-      allowed: false,
-      message: 'No external consent decision. Canonical NEXA Intimacy contract required. Blocked.',
-    };
+    return { status: 'CONTRACT_PENDING', allowed: false, message: 'Canonical NEXA Intimacy consent contract is absent. Execution blocked.' };
   }
+  if (decision.sos) return { status: 'SOS', allowed: false, message: 'SOS active. Immediate stop.' };
+  if (decision.stopped) return { status: 'STOPPED', allowed: false, message: 'Consent stopped.' };
+  if (decision.paused) return { status: 'PAUSED', allowed: false, message: 'Consent paused.' };
+  if (decision.revoked) return { status: 'REVOKED', allowed: false, message: 'Consent revoked.' };
 
-  if (decision.sos) {
-    return { status: 'SOS', allowed: false, message: 'SOS active. Immediate stop.' };
+  const requiredStrings: Array<keyof ExternalConsentDecision> = [
+    'decisionId', 'purpose', 'scope', 'actorId', 'targetId', 'actionId', 'authorityId', 'verificationToken',
+  ];
+  if (requiredStrings.some((field) => !nonEmpty(decision[field]))) {
+    return { status: 'MALFORMED', allowed: false, message: 'Consent envelope is missing a required bounded identity or authority field.' };
   }
-  if (decision.stopped) {
-    return { status: 'STOPPED', allowed: false, message: 'Consent stopped.' };
+  if (!Number.isFinite(decision.issuedAt) || !Number.isFinite(decision.expiresAt)
+      || decision.expiresAt <= decision.issuedAt || decision.issuedAt > now + 5_000) {
+    return { status: 'MALFORMED', allowed: false, message: 'Consent timestamps are invalid.' };
   }
-  if (decision.paused) {
-    return { status: 'PAUSED', allowed: false, message: 'Consent paused.' };
+  if (now > decision.expiresAt) return { status: 'EXPIRED', allowed: false, message: 'Consent expired.' };
+  if (decision.purpose !== expected.purpose
+      || decision.actorId !== expected.actorId
+      || decision.targetId !== expected.targetId
+      || decision.actionId !== expected.actionId) {
+    return { status: 'MISMATCH', allowed: false, message: 'Consent envelope does not bind to the requested actor, target, action, and purpose.' };
   }
-  if (decision.revoked) {
-    return { status: 'REVOKED', allowed: false, message: 'Consent revoked.' };
-  }
-  if (!Number.isFinite(decision.issuedAt) || !Number.isFinite(decision.expiresAt)) {
-    return { status: 'MALFORMED', allowed: false, message: 'Invalid issuedAt/expiresAt.' };
-  }
-  if (decision.expiresAt < decision.issuedAt) {
-    return { status: 'MALFORMED', allowed: false, message: 'expiresAt before issuedAt.' };
-  }
-  if (Date.now() > decision.expiresAt) {
-    return { status: 'EXPIRED', allowed: false, message: 'Consent expired.' };
-  }
-  if (decision.purpose !== requiredPurpose) {
-    return {
-      status: 'ABSENT',
-      allowed: false,
-      message: `Purpose mismatch. Required: ${requiredPurpose}`,
-    };
-  }
-
-  // Envelope may be present for future adapter use, but this donor never authorizes.
   return {
     status: 'CONTRACT_PENDING',
     allowed: false,
-    message: 'Preflight only. Canonical NEXA Intimacy integration not present. Execution blocked.',
+    message: 'Envelope preflight passed, but canonical NEXA Intimacy verification is not integrated. Execution blocked.',
   };
 }
