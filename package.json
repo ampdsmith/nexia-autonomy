@@ -1,6 +1,6 @@
 {
   "name": "nexia-autonomy",
-  "version": "0.1.1-donor-hardening",
+  "version": "0.1.2-donor-hardening",
   "description": "Quarantined autonomy-framework donor for possible future use inside NEXIA. Open-ended deliberation adapter. Free will not proven.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
