@@ -1,27 +1,24 @@
 /**
- * Nexia Autonomy Demo
- * Boots a single Resident with continuous free-will loop.
- * Demonstrates needs awareness, autonomous decision making,
- * and optional voice-style influence (simulated here).
+ * Nexia Autonomy Donor Demo
+ * Boots a single Resident with continuous cognition loop.
+ * Demonstrates needs awareness, open deliberation, and optional expiring influence.
  *
  * Run: npm run demo
  */
 
 import { Resident } from './core/Resident';
 import { SimpleAutonomousMind } from './minds/SimpleAutonomousMind';
-import { InfluenceEvent } from './core/types';
-import { v4 as uuid } from 'uuid';
+import { createVoiceInfluence } from './input/InfluenceChannels';
 
 async function main() {
-  console.log('=== NEXIA AUTONOMY DEMO ===');
-  console.log('Free will engine online. No menus. No forced choices.\n');
+  console.log('=== NEXIA AUTONOMY DONOR DEMO ===');
+  console.log('Open deliberation adapter active. No menus. No forced choices.\n');
 
   const mind = new SimpleAutonomousMind();
   const resident = new Resident('Ava', mind, 'home');
 
   resident.awaken();
 
-  // Status reporter every 4 seconds
   const statusInterval = setInterval(() => {
     const s = resident.status();
     console.log(`\n[${new Date().toISOString().slice(11, 19)}] ${s.name}`);
@@ -30,35 +27,20 @@ async function main() {
     console.log(`  Top needs → hunger:${s.needs.needs.hunger.toFixed(1)} thirst:${s.needs.needs.thirst.toFixed(1)} energy:${s.needs.needs.energy.toFixed(1)} bladder:${s.needs.needs.bladder.toFixed(1)}`);
   }, 4000);
 
-  // Simulate occasional external voice influence (never forced)
   setTimeout(() => {
     console.log('\n>>> External voice influence: "Hey, maybe walk to the kitchen"');
-    const event: InfluenceEvent = {
-      id: uuid(),
-      channel: 'voice',
-      content: 'Hey, maybe walk to the kitchen',
-      timestamp: Date.now(),
-      strength: 0.7,
-    };
-    resident.influence(event);
+    resident.influence(createVoiceInfluence('Hey, maybe walk to the kitchen', 0.7));
   }, 12000);
 
   setTimeout(() => {
     console.log('\n>>> External voice influence: "You look tired, rest if you want"');
-    resident.influence({
-      id: uuid(),
-      channel: 'voice',
-      content: 'You look tired, rest if you want',
-      timestamp: Date.now(),
-      strength: 0.55,
-    });
+    resident.influence(createVoiceInfluence('You look tired, rest if you want', 0.55));
   }, 28000);
 
-  // Run for ~45 seconds then shut down cleanly
   setTimeout(() => {
     clearInterval(statusInterval);
     resident.sleep();
-    console.log('\n=== Demo complete. Resident remains fully autonomous when awakened again. ===');
+    console.log('\n=== Demo complete. ===');
     process.exit(0);
   }, 45000);
 }
