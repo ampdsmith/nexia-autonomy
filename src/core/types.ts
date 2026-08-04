@@ -1,6 +1,14 @@
 /**
- * Nexia Autonomy Core Types
- * Strict free-will design. No external choice lists ever reach the mind.
+ * Nexia Autonomy Core Types (hardened donor version)
+ *
+ * This is a quarantined autonomy-framework donor for possible future use inside NEXIA.
+ * It is not NEXIA, not a game, not a game engine, and not a separate autonomy platform.
+ *
+ * OPEN-ENDED DELIBERATION ADAPTER: YES
+ * AUTONOMOUS DECISION POLICY: POSSIBLE
+ * FREE WILL PROVEN: NO
+ * CONSCIOUSNESS PROVEN: NO
+ * PERSONHOOD PROVEN: NO
  */
 
 export type NeedType =
@@ -20,14 +28,14 @@ export interface NeedState {
   type: NeedType;
   value: number;       // 0 = fully satisfied, 100 = critical need
   decayRate: number;   // units per second
-  thresholdAware: number; // value at which resident becomes consciously aware
+  thresholdAware: number;
   thresholdCritical: number;
 }
 
 export interface NeedsSnapshot {
   timestamp: number;
   needs: Record<NeedType, number>;
-  awareSignals: NeedType[];   // needs currently above aware threshold
+  awareSignals: NeedType[];
   criticalSignals: NeedType[];
 }
 
@@ -41,10 +49,10 @@ export type ActionId =
 export interface Intention {
   id: string;
   action: ActionId;
-  target?: string;           // object, location, or other resident id
+  target?: string;
   parameters?: Record<string, unknown>;
-  urgency: number;           // 0-1, derived from needs + free deliberation
-  reasoning?: string;        // optional internal monologue (for debug / SI transparency)
+  urgency: number;
+  reasoning?: string;        // optional, for transparency / debug only
   createdAt: number;
 }
 
@@ -53,7 +61,10 @@ export interface InfluenceEvent {
   channel: 'voice' | 'mouse' | 'touch';
   content: string | object;
   timestamp: number;
-  strength: number;          // how strongly the external force is pushing (still optional)
+  strength: number;          // 0-1
+  expiresAt: number;         // hard expiration
+  consumed: boolean;         // once true, must not be re-presented
+  speakerId?: string;        // optional identity when available
 }
 
 export interface Perception {
@@ -69,13 +80,13 @@ export interface ActionResult {
   success: boolean;
   partial: boolean;
   message: string;
-  newStateHints?: Partial<Record<NeedType, number>>; // e.g. eating reduces hunger
+  newStateHints?: Partial<Record<NeedType, number>>;
 }
 
 export interface CognitionContext {
   needs: NeedsSnapshot;
   perception: Perception;
-  recentInfluences: InfluenceEvent[];
+  recentInfluences: InfluenceEvent[];  // only non-expired, non-consumed
   recentActions: ActionResult[];
   bodyState: BodyState;
   personalityHints?: string;
@@ -86,13 +97,16 @@ export interface BodyState {
   posture: 'standing' | 'sitting' | 'lying' | 'falling' | 'kneeling';
   clothing: string[];
   energyLevel: number;
-  isIntimateCapable: boolean;
   inventory: string[];
+  // isIntimateCapable removed as an authorization signal.
+  // Capability is never sufficient for interpersonal action.
 }
 
 /**
- * The Mind interface. Any AI or SI implements this to inhabit a Resident.
+ * The Mind interface.
+ * Any AI or SI can implement this to inhabit a Resident.
  * The Autonomy Core never forces options into the mind.
+ * Implementing this interface does not prove free will, consciousness, or personhood.
  */
 export interface Mind {
   deliberate(context: CognitionContext): Promise<Intention | null>;
