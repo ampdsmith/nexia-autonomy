@@ -1,12 +1,5 @@
 /**
- * Donor-side Consent Boundary
- *
- * This module implements ONLY the donor-side responsibility:
- * - require a verified external consent decision
- * - validate purpose, scope, expiration, and revocation status
- * - fail closed when the canonical contract is absent
- * - stop immediately on pause, stop, SOS, expiration, or revocation
- * - return CONTRACT_PENDING until the canonical integration exists
+ * Donor-side Consent Boundary (preflight only)
  *
  * THIS DONOR DOES NOT:
  * - issue canonical consent
@@ -14,20 +7,20 @@
  * - own NEXA Intimacy policy
  * - store public intimacy receipts
  * - replace NEXA Intimacy
+ * - ever return a locally VALID authorization for execution
  */
 
 export type ConsentStatus =
-  | 'CONTRACT_PENDING'      // canonical system not yet integrated
-  | 'ABSENT'                // no consent decision provided
+  | 'CONTRACT_PENDING'
+  | 'ABSENT'
   | 'EXPIRED'
   | 'REVOKED'
   | 'PAUSED'
   | 'STOPPED'
   | 'SOS'
-  | 'VALID';                 // only after external verified decision is present and current
+  | 'MALFORMED';
 
 export interface ExternalConsentDecision {
-  /** Opaque reference to a decision made by the canonical consent authority */
   decisionId: string;
   purpose: string;
   scope: string;
@@ -37,31 +30,33 @@ export interface ExternalConsentDecision {
   paused: boolean;
   stopped: boolean;
   sos: boolean;
-  /** Signature or verification token from the canonical system (opaque to this donor) */
+  /** Required envelope fields for future canonical adapter */
+  actorId?: string;
+  targetId?: string;
+  actionId?: string;
+  authorityId?: string;
   verificationToken?: string;
 }
 
 export interface ConsentValidationResult {
   status: ConsentStatus;
-  allowed: boolean;
+  allowed: boolean; // always false in this donor
   message: string;
 }
 
 /**
- * Validate an external consent decision for a social or intimate action.
- * Fail-closed by design.
+ * Preflight inspection only. Execution is always blocked (CONTRACT_PENDING)
+ * until canonical NEXA Intimacy integration exists.
  */
 export function validateExternalConsent(
   decision: ExternalConsentDecision | null | undefined,
   requiredPurpose: string
 ): ConsentValidationResult {
-  // Canonical integration does not yet exist in this donor.
-  // Until it does, every interpersonal action must return CONTRACT_PENDING.
   if (!decision) {
     return {
       status: 'CONTRACT_PENDING',
       allowed: false,
-      message: 'No external consent decision provided. Canonical NEXA Intimacy contract required. Action blocked (fail-closed).',
+      message: 'No external consent decision. Canonical NEXA Intimacy contract required. Blocked.',
     };
   }
 
@@ -77,6 +72,12 @@ export function validateExternalConsent(
   if (decision.revoked) {
     return { status: 'REVOKED', allowed: false, message: 'Consent revoked.' };
   }
+  if (!Number.isFinite(decision.issuedAt) || !Number.isFinite(decision.expiresAt)) {
+    return { status: 'MALFORMED', allowed: false, message: 'Invalid issuedAt/expiresAt.' };
+  }
+  if (decision.expiresAt < decision.issuedAt) {
+    return { status: 'MALFORMED', allowed: false, message: 'expiresAt before issuedAt.' };
+  }
   if (Date.now() > decision.expiresAt) {
     return { status: 'EXPIRED', allowed: false, message: 'Consent expired.' };
   }
@@ -84,16 +85,14 @@ export function validateExternalConsent(
     return {
       status: 'ABSENT',
       allowed: false,
-      message: `Purpose mismatch. Required: ${requiredPurpose}, provided: ${decision.purpose}`,
+      message: `Purpose mismatch. Required: ${requiredPurpose}`,
     };
   }
 
-  // Even with a structurally valid decision object, this donor still treats
-  // the action as CONTRACT_PENDING until the real canonical integration is present.
-  // This prevents the donor from becoming a parallel consent authority.
+  // Envelope may be present for future adapter use, but this donor never authorizes.
   return {
     status: 'CONTRACT_PENDING',
     allowed: false,
-    message: 'External decision object present but canonical NEXA Intimacy integration is not yet available. Action blocked (fail-closed).',
+    message: 'Preflight only. Canonical NEXA Intimacy integration not present. Execution blocked.',
   };
 }
