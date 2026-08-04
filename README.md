@@ -13,24 +13,21 @@ PERSONHOOD PROVEN:          NO
 PRODUCTION STATUS:          NO
 ```
 
-## CLEOPATRA takeover correction
+## CLEOPATRA independent-audit correction 01
 
 Work order: `NEXIA-AUTONOMY-DONOR-HARDENING-001-CLEOPATRA-TAKEOVER-01`
 
-The takeover hardens this donor without promoting it to canonical source:
+This narrow audit correction:
 
-- requires exact resident targeting and bounded provenance for every influence;
-- rejects malformed, future-dated, oversized, duplicate, expired, wrong-resident, and queue-overflow events;
-- removes silent queue eviction;
-- deep-clones and freezes the context exposed to extension minds;
-- validates intention IDs, actions, timestamps, urgency, replay, reasoning, targets, and parameter size;
-- bounds mind deliberation and action execution with timeout gates;
-- clears pending influences on stop by default;
-- binds consent preflight to exact actor, target, action, and purpose while always blocking execution until a canonical NEXA Intimacy contract exists;
-- prioritizes bounded stop/pause/cancel controls before simulated drive policy;
-- replaces first-person awareness claims with explicit simulated-need language;
-- removes unused `uuid` and `ws` runtime dependencies in favor of Node's built-in secure UUID implementation;
-- expands executable hardening coverage from 26 assertions to 55 assertions.
+- corrects `CONTRIBUTING.md` so current documentation contains no unsupported autonomy, feeling, citizenship, personhood, or free-will claims;
+- adds a bounded seen-at-ingestion ledger so accepted influence IDs cannot be reused after expiration, deferral, clearing, or removal;
+- makes stop, pause, and cancel results persistent until a separately authorized resume request succeeds;
+- passes `AbortSignal` through Mind deliberation and asynchronous action execution boundaries;
+- binds consent preflight to the exact intention instance, action, scope, actor, target, expected canonical authority, opaque verification reference, one-time reference, and replay ledger;
+- continues to return `CONTRACT_PENDING` for all well-shaped sensitive-action preflight attempts;
+- rejects duplicate IDs inside deliberation arrays instead of silently collapsing them;
+- validates directly constructed mouse and touch payloads at the cognition ingestion boundary;
+- adds executable negative tests for each correction.
 
 ## Run
 
@@ -38,22 +35,7 @@ The takeover hardens this donor without promoting it to canonical source:
 npm install
 npm test
 npm run build
-npm run demo
 ```
-
-## Verified takeover evidence
-
-The tested correction source was reconstructed from the exact GitHub branch and executed with:
-
-```text
-Node: v22.16.0
-TypeScript: 5.8.3 execution environment
-Focused tests: 55 passed / 0 failed / 0 skipped
-TypeScript build: passed
-Compiled JavaScript test run: passed
-```
-
-The environment could not reach the package registry, so `npm ci` dependency-download execution was not independently completed. The root lock intent is aligned with `package.json`, but a complete registry-resolved lock graph remains a recorded limitation until verified in a connected package-install environment.
 
 ## Known limitations
 
@@ -61,16 +43,18 @@ The environment could not reach the package registry, so `npm ci` dependency-dow
 - `DeterministicBaselineMind` is a fixed demonstration policy, not open-ended cognition.
 - Most actions remain `NOT_IMPLEMENTED` and perform zero state mutation.
 - Consent remains preflight-only and always blocks sensitive execution.
+- Cooperative cancellation requires extension Minds and asynchronous action adapters to honor the provided `AbortSignal`; JavaScript cannot forcibly terminate a non-cooperative promise.
 - No canonical NEXA Intimacy contract, live provider, database, production identity, deployment, or external action is connected.
 - No GitHub Actions CI workflow is installed or claimed passed.
-- Complete package-registry installation and lock-graph verification remain pending.
+- The committed `package-lock.json` contains only root intent and is not a complete registry-resolved transitive lock graph.
+- Package-registry access and a clean `npm ci` remain unproven until executed in a connected package-install environment.
 
 ## Branch discipline
 
 ```text
 Preserved main: 73d121c929abb071cbc90d6a85d7e1b8208311ca
 Authorized branch: work/nexia-autonomy-donor-hardening-v1
-Takeover starting head: 9adc32f708f068beeb455703e6331f8b2b953399
+Audit correction starting head: 412646329565cecbad02b017eb2d6a5b75683056
 Direct writes to main: forbidden
 New branches or repositories: forbidden
 ```
