@@ -5,9 +5,11 @@ import { ActionSystem } from './ActionSystem';
 import { CognitionLoop } from './CognitionLoop';
 
 /**
- * Resident
- * A Nexia World citizen body + autonomy core.
- * Attach any Mind (AI or SI) to give it free will under the rules.
+ * Resident (hardened donor version)
+ *
+ * Body + autonomy core host for an open-ended Mind adapter.
+ * Attaching a Mind enables autonomous decision policy under the rules of this donor.
+ * It does not prove free will, consciousness, or personhood.
  */
 export class Resident {
   readonly id: string;
@@ -29,7 +31,6 @@ export class Resident {
       posture: 'standing',
       clothing: ['basic_outfit'],
       energyLevel: 80,
-      isIntimateCapable: true,
       inventory: [],
     };
     this.actions = new ActionSystem(body);
@@ -45,10 +46,10 @@ export class Resident {
     this.cognition = new CognitionLoop(mind, this.needs, this.actions, initialPerception);
   }
 
-  /** Start living autonomously */
+  /** Start the continuous cognition loop */
   awaken() {
     this.cognition.start();
-    console.log(`[Resident ${this.name}] Awakened. Free will online.`);
+    console.log(`[Resident ${this.name}] Cognition loop started. Open deliberation adapter active.`);
   }
 
   sleep() {
@@ -56,12 +57,11 @@ export class Resident {
     console.log(`[Resident ${this.name}] Cognition paused.`);
   }
 
-  /** Influence only — never force */
+  /** Influence only — never force. Events expire and are single-use. */
   influence(event: InfluenceEvent) {
     this.cognition.pushInfluence(event);
   }
 
-  /** World systems update what the resident can perceive */
   updateWorld(perception: Perception) {
     this.cognition.updatePerception(perception);
   }
