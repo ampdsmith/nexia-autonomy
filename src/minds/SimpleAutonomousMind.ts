@@ -2,18 +2,23 @@ import { v4 as uuid } from 'uuid';
 import { Mind, CognitionContext, Intention, ActionId } from '../core/types';
 
 /**
- * SimpleAutonomousMind
- * Baseline free-will implementation that demonstrates pure internal drive.
- * No external menus. Generates intentions purely from needs + perception + light influence weighting.
- * Replace this with any LLM or custom SI that implements the Mind interface.
+ * SimpleAutonomousMind (hardened donor version)
+ *
+ * Baseline open-ended deliberation adapter.
+ * Generates intentions from needs + perception + optional influence.
+ * Internal desire / need scores never authorize hug, touch, kiss, grab, or intimate.
+ * Those actions are blocked at the ActionSystem boundary until a canonical external consent decision exists.
+ *
+ * This implementation demonstrates autonomous decision policy.
+ * It does not prove free will, consciousness, or personhood.
  */
 export class SimpleAutonomousMind implements Mind {
-  name = 'SimpleAutonomousMind-v1';
+  name = 'SimpleAutonomousMind-v1-hardened';
 
   async deliberate(ctx: CognitionContext): Promise<Intention | null> {
     const { needs, perception, recentInfluences, bodyState } = ctx;
 
-    // Critical first — survival
+    // Critical physiological first
     if (needs.criticalSignals.includes('bladder')) {
       return this.intend('useRestroom', 0.95, 'Critical bladder pressure');
     }
@@ -27,7 +32,7 @@ export class SimpleAutonomousMind implements Mind {
       return this.intend('nap', 0.85, 'Exhausted');
     }
 
-    // Strong aware signals
+    // Strong aware physiological signals
     if (needs.awareSignals.includes('bladder') && needs.needs.bladder > 65) {
       return this.intend('useRestroom', 0.75, 'Need restroom');
     }
@@ -35,7 +40,6 @@ export class SimpleAutonomousMind implements Mind {
       return this.intend('drink', 0.7, 'Thirsty');
     }
     if (needs.awareSignals.includes('hunger') && needs.needs.hunger > 55) {
-      // Prefer cooking if kitchen is nearby
       if (perception.nearbyObjects.includes('kitchen')) {
         return this.intend('cook', 0.65, 'Hungry and kitchen available');
       }
@@ -51,25 +55,21 @@ export class SimpleAutonomousMind implements Mind {
       return this.intend('nap', 0.6, 'Tired');
     }
 
-    // Soft social / intimacy / purpose
-    if (needs.awareSignals.includes('social') && needs.needs.social > 60 && perception.nearbyResidents.length > 0) {
-      return this.intend('hug', 0.5, 'Want connection', perception.nearbyResidents[0]);
-    }
-    if (needs.awareSignals.includes('intimacy') && needs.needs.intimacy > 70) {
-      return this.intend('intimate', 0.45, 'Seeking intimacy');
-    }
+    // Purpose / work — non-interpersonal
     if (needs.awareSignals.includes('purpose') && needs.needs.purpose > 60) {
       return this.intend('work', 0.5, 'Need to do something meaningful');
     }
 
-    // Light influence acceptance (optional, not forced)
+    // Optional light influence acceptance (never forced)
     const strongVoice = recentInfluences
-      .filter(i => i.channel === 'voice' && i.strength > 0.6)
+      .filter(i => i.channel === 'voice' && i.strength > 0.6 && !i.consumed)
       .slice(-1)[0];
     if (strongVoice && typeof strongVoice.content === 'string') {
       const text = strongVoice.content.toLowerCase();
       if (text.includes('walk') || text.includes('go to')) {
-        return this.intend('walk', 0.4, `Responding to voice: ${text}`, undefined, { destination: this.extractDest(text) });
+        return this.intend('walk', 0.4, `Responding to voice: ${text}`, undefined, {
+          destination: this.extractDest(text),
+        });
       }
       if (text.includes('rest') || text.includes('sleep') || text.includes('nap')) {
         return this.intend('nap', 0.45, 'Voice suggested rest');
@@ -79,12 +79,12 @@ export class SimpleAutonomousMind implements Mind {
       }
     }
 
-    // Default: idle observation or light locomotion if curiosity high
+    // Curiosity → observe only
     if (needs.needs.curiosity > 55) {
       return this.intend('observe', 0.25, 'Curious about surroundings');
     }
 
-    // Free will includes choosing to do nothing
+    // Choosing to do nothing is valid
     return null;
   }
 
