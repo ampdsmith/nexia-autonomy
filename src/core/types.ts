@@ -1,9 +1,7 @@
 /**
- * Nexia Autonomy Core Types (hardened donor version)
+ * Nexia Autonomy Core Types (hardening correction cycle)
  *
- * This is a quarantined autonomy-framework donor for possible future use inside NEXIA.
- * It is not NEXIA, not a game, not a game engine, and not a separate autonomy platform.
- *
+ * Quarantined autonomy-framework donor for possible future use inside NEXIA.
  * OPEN-ENDED DELIBERATION ADAPTER: YES
  * AUTONOMOUS DECISION POLICY: POSSIBLE
  * FREE WILL PROVEN: NO
@@ -26,8 +24,8 @@ export type NeedType =
 
 export interface NeedState {
   type: NeedType;
-  value: number;       // 0 = fully satisfied, 100 = critical need
-  decayRate: number;   // units per second
+  value: number;
+  decayRate: number;
   thresholdAware: number;
   thresholdCritical: number;
 }
@@ -46,14 +44,35 @@ export type ActionId =
   | 'hug' | 'touch' | 'kiss' | 'grab' | 'intimate'
   | 'idle' | 'observe' | 'speak';
 
+/** Explicit action lifecycle. Implementation maturity is not encoded as success. */
+export type ActionLifecycle =
+  | 'REQUESTED'
+  | 'VALIDATED'
+  | 'STARTED'
+  | 'INTERRUPTED'
+  | 'PARTIALLY_COMPLETED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'NOT_IMPLEMENTED';
+
 export interface Intention {
   id: string;
   action: ActionId;
   target?: string;
   parameters?: Record<string, unknown>;
   urgency: number;
-  reasoning?: string;        // optional, for transparency / debug only
+  reasoning?: string; // must never contain raw private transcripts
   createdAt: number;
+}
+
+/**
+ * Mind returns this envelope so the loop can consume only explicitly handled influences.
+ */
+export interface DeliberationResult {
+  intention: Intention | null;
+  acceptedInfluenceIds: string[];
+  rejectedInfluenceIds: string[];
+  deferredInfluenceIds: string[];
 }
 
 export interface InfluenceEvent {
@@ -62,9 +81,12 @@ export interface InfluenceEvent {
   content: string | object;
   timestamp: number;
   strength: number;          // 0-1
-  expiresAt: number;         // hard expiration
-  consumed: boolean;         // once true, must not be re-presented
-  speakerId?: string;        // optional identity when available
+  expiresAt: number;
+  consumed: boolean;
+  speakerId?: string;
+  targetResidentId?: string; // optional resident target
+  provenance?: string;       // source system / session id
+  confidence?: number;       // 0-1 recognition confidence when available
 }
 
 export interface Perception {
@@ -77,6 +99,7 @@ export interface Perception {
 
 export interface ActionResult {
   intentionId: string;
+  lifecycle: ActionLifecycle;
   success: boolean;
   partial: boolean;
   message: string;
@@ -86,7 +109,7 @@ export interface ActionResult {
 export interface CognitionContext {
   needs: NeedsSnapshot;
   perception: Perception;
-  recentInfluences: InfluenceEvent[];  // only non-expired, non-consumed
+  recentInfluences: InfluenceEvent[]; // only non-expired, non-consumed, non-processed
   recentActions: ActionResult[];
   bodyState: BodyState;
   personalityHints?: string;
@@ -98,17 +121,18 @@ export interface BodyState {
   clothing: string[];
   energyLevel: number;
   inventory: string[];
-  // isIntimateCapable removed as an authorization signal.
-  // Capability is never sufficient for interpersonal action.
 }
 
 /**
- * The Mind interface.
- * Any AI or SI can implement this to inhabit a Resident.
- * The Autonomy Core never forces options into the mind.
- * Implementing this interface does not prove free will, consciousness, or personhood.
+ * Mind interface.
+ * Implementing this does not prove free will, consciousness, or personhood.
  */
 export interface Mind {
-  deliberate(context: CognitionContext): Promise<Intention | null>;
+  deliberate(context: CognitionContext): Promise<DeliberationResult>;
   name?: string;
 }
+
+/** Bounded TTL validation constants (ms) */
+export const INFLUENCE_TTL_MIN_MS = 500;
+export const INFLUENCE_TTL_MAX_MS = 120_000;
+export const INFLUENCE_TTL_DEFAULT_MS = 30_000;
