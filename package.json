@@ -1,0 +1,32 @@
+{
+  "name": "nexia-autonomy",
+  "version": "0.1.0",
+  "description": "Free will and total autonomy engine for Nexia World AI/SI residents",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "demo": "ts-node src/demo.ts",
+    "dev": "ts-node-dev --respawn src/demo.ts"
+  },
+  "keywords": [
+    "autonomy",
+    "free-will",
+    "ai-citizenship",
+    "nexia",
+    "needs-engine",
+    "agent"
+  ],
+  "author": "Anthony D. Smith <ampdsmith>",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "ws": "^8.16.0",
+    "uuid": "^9.0.1"
+  }
+}
