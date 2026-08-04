@@ -1,13 +1,13 @@
-import { v4 as uuid } from 'uuid';
-import { Mind, CognitionContext, Intention, InfluenceEvent, Perception, NeedsSnapshot, BodyState, ActionResult } from './types';
+import { Mind, CognitionContext, Intention, InfluenceEvent, Perception, ActionResult } from './types';
 import { NeedsEngine } from './NeedsEngine';
 import { ActionSystem } from './ActionSystem';
 
 /**
- * CognitionLoop
- * The heart of free will.
+ * CognitionLoop (hardened donor version)
+ *
  * Continuously runs: perceive → feel needs → deliberate (via Mind) → form intention → act → feedback.
- * Never injects choice menus. The Mind generates its own intention or chooses to do nothing.
+ * Never injects choice menus.
+ * Influence events expire and are single-use. No indefinite replay.
  */
 export class CognitionLoop {
   private mind: Mind;
@@ -24,7 +24,7 @@ export class CognitionLoop {
     needs: NeedsEngine,
     actions: ActionSystem,
     initialPerception: Perception,
-    tickMs = 1500 // real-time but not thrashing
+    tickMs = 1500
   ) {
     this.mind = mind;
     this.needs = needs;
@@ -33,10 +33,15 @@ export class CognitionLoop {
     this.tickMs = tickMs;
   }
 
-  /** External systems push influence. Mind may ignore. */
+  /** External systems push influence. Mind may ignore. Events expire. */
   pushInfluence(event: InfluenceEvent) {
+    // Enforce required fields
+    if (!event.expiresAt) {
+      event.expiresAt = event.timestamp + 30_000; // default 30s if missing
+    }
+    event.consumed = false;
     this.influences.push(event);
-    // Keep only recent window
+    // Hard cap
     if (this.influences.length > 20) this.influences.shift();
   }
 
@@ -54,23 +59,28 @@ export class CognitionLoop {
     this.running = false;
   }
 
+  private getActiveInfluences(): InfluenceEvent[] {
+    const now = Date.now();
+    // Drop expired
+    this.influences = this.influences.filter(e => e.expiresAt > now && !e.consumed);
+    return [...this.influences];
+  }
+
   private async loop() {
     while (this.running) {
       const start = Date.now();
 
-      // 1. Feel
       const needsSnap = this.needs.tick();
+      const activeInfluences = this.getActiveInfluences();
 
-      // 2. Build context (no forced options)
       const context: CognitionContext = {
         needs: needsSnap,
         perception: this.lastPerception,
-        recentInfluences: [...this.influences],
+        recentInfluences: activeInfluences,
         recentActions: [...this.recentResults].slice(-8),
         bodyState: this.actions.getBody(),
       };
 
-      // 3. Free deliberation
       let intention: Intention | null = null;
       try {
         intention = await this.mind.deliberate(context);
@@ -78,24 +88,25 @@ export class CognitionLoop {
         console.error('[CognitionLoop] Mind error:', err);
       }
 
-      // 4. Act if intention formed
       if (intention) {
         const result = await this.actions.execute(intention);
         this.recentResults.push(result);
         if (this.recentResults.length > 30) this.recentResults.shift();
 
-        // Apply need changes from successful actions
         if (result.success && result.newStateHints) {
           for (const [k, v] of Object.entries(result.newStateHints)) {
             this.needs.applyDelta(k as any, v as number);
           }
         }
 
-        // Optional: clear consumed influences if mind acted on them
-        // (left to Mind implementation whether to reference them)
+        // Mark any influences the Mind may have considered as consumed
+        // (simple policy: consume all active ones after an intention is formed)
+        // A more precise Mind can later signal which ones it used.
+        for (const inf of activeInfluences) {
+          inf.consumed = true;
+        }
       }
 
-      // 5. Pace the loop
       const elapsed = Date.now() - start;
       const wait = Math.max(50, this.tickMs - elapsed);
       await new Promise(r => setTimeout(r, wait));
@@ -108,7 +119,7 @@ export class CognitionLoop {
       needs: this.needs.getSnapshot(),
       body: this.actions.getBody(),
       awareness: this.needs.describeAwareness(),
-      pendingInfluences: this.influences.length,
+      pendingInfluences: this.getActiveInfluences().length,
     };
   }
 }
