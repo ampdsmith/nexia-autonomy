@@ -1,23 +1,22 @@
 {
   "name": "nexia-autonomy",
-  "version": "0.1.0",
-  "description": "Free will and total autonomy engine for Nexia World AI/SI residents",
+  "version": "0.1.1-donor-hardening",
+  "description": "Quarantined autonomy-framework donor for possible future use inside NEXIA. Open-ended deliberation adapter. Free will not proven.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "demo": "ts-node src/demo.ts",
-    "dev": "ts-node-dev --respawn src/demo.ts"
+    "dev": "ts-node-dev --respawn src/demo.ts",
+    "test": "ts-node src/tests/hardening.test.ts"
   },
   "keywords": [
     "autonomy",
-    "free-will",
-    "ai-citizenship",
-    "nexia",
+    "deliberation-adapter",
     "needs-engine",
-    "agent",
-    "si"
+    "nexia-donor",
+    "agent"
   ],
   "author": "Anthony D. Smith <ampdsmith>",
   "license": "MIT",
