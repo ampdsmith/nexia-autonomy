@@ -13,9 +13,20 @@ PERSONHOOD PROVEN:          NO
 PRODUCTION STATUS:          NO
 ```
 
-## CLEOPATRA replay-authority capacity correction 04
+## CLEOPATRA influence-factory boundary correction 05
 
 Work order: `NEXIA-AUTONOMY-DONOR-HARDENING-001-CLEOPATRA-TAKEOVER-01`
+
+Continuous public-API usability inspection found that the mouse/touch factory helpers could construct events that the cognition ingestion boundary would later reject. The factories accepted out-of-range mouse buttons, empty optional target/gesture strings, duplicate/fractional touch IDs, and unknown runtime fields.
+
+Correction 05 aligns the public constructors with the already-hardened ingestion schema:
+
+- mouse factory validates finite coordinates, button integer range `0-5`, bounded non-empty optional target, and known keys only;
+- touch factory validates 1-10 points, integer unique touch IDs, finite coordinates, bounded non-empty optional gesture/target, and known payload/point keys only;
+- returned content is rebuilt from validated known fields instead of blindly spreading caller objects;
+- new factory-boundary regression coverage proves valid mouse/touch creation and rejection of malformed runtime payloads.
+
+## CLEOPATRA replay-authority capacity correction 04
 
 Continuous builder inspection after correction 03 found that `InMemoryReplayLedger` preserved replay authority correctly but retained accepted influence/intention identities without any capacity boundary. A sufficiently long-lived or adversarial donor process could therefore turn replay protection into unbounded process-memory growth.
 
@@ -96,6 +107,7 @@ Focused checks:
 npm run test:replay
 npm run test:consent
 npm run test:replay-capacity
+npm run test:factories
 ```
 
 ## Known limitations
@@ -120,6 +132,7 @@ Authorized branch: work/nexia-autonomy-donor-hardening-v1
 Audit correction 01 head: 3e336392f6f08f4659b123a15a52fa7952e2e2d3
 Audit correction 02 evidence head: 95d2260b735b6b20ccd7324afb26d9b8fc723a03
 Usability / replay correction 03 evidence head: 55f2905c863a3c6d25581bf29e7f4c0817bbd16d
+Replay-authority capacity correction 04 evidence head: c58ef024ffffae1ff6fb1bffdd19901ce34c56ab
 Direct writes to main: forbidden
 New branches or repositories: forbidden
 ```
