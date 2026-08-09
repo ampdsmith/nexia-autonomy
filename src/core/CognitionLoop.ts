@@ -8,11 +8,13 @@ import {
 } from './types';
 import { NeedsEngine } from './NeedsEngine';
 import { ActionSystem } from './ActionSystem';
+import { DEFAULT_DONOR_REPLAY_LEDGER, ReplayLedger } from './ReplayLedger';
 
 export type InfluenceIngestionStatus =
   | 'ACCEPTED' | 'REJECTED_DUPLICATE_PENDING' | 'REJECTED_REPLAY' | 'REJECTED_PROCESSED'
   | 'REJECTED_CONSUMED' | 'REJECTED_MALFORMED' | 'REJECTED_WRONG_RESIDENT'
-  | 'REJECTED_EXPIRED' | 'REJECTED_FUTURE_TIMESTAMP' | 'REJECTED_QUEUE_FULL';
+  | 'REJECTED_EXPIRED' | 'REJECTED_FUTURE_TIMESTAMP' | 'REJECTED_QUEUE_FULL'
+  | 'REJECTED_REPLAY_LEDGER_UNAVAILABLE';
 
 export interface InfluenceIngestionResult { status: InfluenceIngestionStatus; eventId: string; }
 export interface ResumeRequest {
@@ -22,6 +24,10 @@ export interface ResumeRequest {
   requestedAt: number;
 }
 export type ControlAuthorizer = (request: Readonly<ResumeRequest>) => boolean | Promise<boolean>;
+
+type IntentionValidation =
+  | { ok: true; intention: Intention | null }
+  | { ok: false; reason: string };
 
 function clonePerception(p: Perception): Perception {
   return { timestamp: p.timestamp, location: p.location, nearbyObjects: [...p.nearbyObjects], nearbyResidents: [...p.nearbyResidents], environmentNotes: [...p.environmentNotes] };
@@ -79,6 +85,7 @@ export class CognitionLoop {
     private readonly deliberationTimeoutMs = 1_000,
     private readonly actionTimeoutMs = 1_000,
     private readonly controlAuthorizer: ControlAuthorizer = () => false,
+    private readonly replayLedger: ReplayLedger | null = DEFAULT_DONOR_REPLAY_LEDGER,
   ) {
     this.lastPerception = this.validateAndClonePerception(initialPerception);
     if (!residentId.trim()) throw new TypeError('residentId is required.');
@@ -98,10 +105,21 @@ export class CognitionLoop {
     if (event.timestamp > now + INFLUENCE_FUTURE_SKEW_MAX_MS) return { status: 'REJECTED_FUTURE_TIMESTAMP', eventId: id };
     if (event.expiresAt <= now) return { status: 'REJECTED_EXPIRED', eventId: id };
     if (this.influences.length >= this.MAX_QUEUE) return { status: 'REJECTED_QUEUE_FULL', eventId: id };
+
+    const replayClaim = this.claimReplayIdentity('influence', id);
+    if (replayClaim === 'UNAVAILABLE') return { status: 'REJECTED_REPLAY_LEDGER_UNAVAILABLE', eventId: id };
+    if (replayClaim === 'REPLAY') return { status: 'REJECTED_REPLAY', eventId: id };
+
     this.influences.push(cloneInfluence({ ...event, consumed: false }));
     this.seenInfluenceIds.add(id);
     this.trimSet(this.seenInfluenceIds, this.MAX_SEEN);
     return { status: 'ACCEPTED', eventId: id };
+  }
+
+  private claimReplayIdentity(kind: 'influence' | 'intention', id: string): 'ACCEPTED' | 'REPLAY' | 'UNAVAILABLE' {
+    if (!this.replayLedger) return 'UNAVAILABLE';
+    try { return this.replayLedger.claim(kind, this.residentId, id); }
+    catch { return 'UNAVAILABLE'; }
   }
 
   private validateEventShape(event: InfluenceEvent): InfluenceIngestionStatus | null {
@@ -183,7 +201,7 @@ export class CognitionLoop {
   }
 
   private suspendFromControl(control: Exclude<CognitionControl, 'NONE'>): void {
-    this.controlState = control === 'PAUSE' ? 'PAUSED' : 'STOPPED';
+    this.controlState = control === 'PAUSE' ? 'PAUSED' : control === 'CANCEL' ? 'CANCELLED' : 'STOPPED';
     this.running = false;
     this.generation += 1;
     this.abortActiveOperations(new Error(`COGNITION_${this.controlState}`));
@@ -209,16 +227,22 @@ export class CognitionLoop {
     this.trimSet(this.processedIds, this.MAX_PROCESSED);
   }
 
-  private validateIntention(intention: Intention | null, now: number): Intention | null | false {
-    if (intention === null) return null;
-    if (!intention || typeof intention.id !== 'string' || !intention.id.trim() || intention.id.length > 200) return false;
-    if (this.processedIntentionIds.has(intention.id) || !ACTION_IDS.includes(intention.action)) return false;
-    if (!Number.isFinite(intention.urgency) || intention.urgency < 0 || intention.urgency > 1) return false;
-    if (!Number.isFinite(intention.createdAt) || intention.createdAt < now - INTENTION_MAX_AGE_MS || intention.createdAt > now + INTENTION_FUTURE_SKEW_MAX_MS) return false;
-    if (intention.target !== undefined && (typeof intention.target !== 'string' || !intention.target.trim() || intention.target.length > 200)) return false;
-    if (intention.reasoning !== undefined && (typeof intention.reasoning !== 'string' || intention.reasoning.length > INTENTION_REASONING_MAX_LENGTH)) return false;
-    if (intention.parameters !== undefined && byteLength(intention.parameters) > INTENTION_PARAMETERS_MAX_BYTES) return false;
-    return { ...intention, parameters: intention.parameters ? JSON.parse(JSON.stringify(intention.parameters)) : undefined };
+  private validateIntention(intention: Intention | null, now: number): IntentionValidation {
+    if (intention === null) return { ok: true, intention: null };
+    if (!intention || typeof intention.id !== 'string' || !intention.id.trim() || intention.id.length > 200) return { ok: false, reason: 'INVALID_INTENTION' };
+    if (this.processedIntentionIds.has(intention.id)) return { ok: false, reason: 'INTENTION_REPLAY' };
+    if (!ACTION_IDS.includes(intention.action)) return { ok: false, reason: 'INVALID_INTENTION' };
+    if (!Number.isFinite(intention.urgency) || intention.urgency < 0 || intention.urgency > 1) return { ok: false, reason: 'INVALID_INTENTION' };
+    if (!Number.isFinite(intention.createdAt) || intention.createdAt < now - INTENTION_MAX_AGE_MS || intention.createdAt > now + INTENTION_FUTURE_SKEW_MAX_MS) return { ok: false, reason: 'INVALID_INTENTION' };
+    if (intention.target !== undefined && (typeof intention.target !== 'string' || !intention.target.trim() || intention.target.length > 200)) return { ok: false, reason: 'INVALID_INTENTION' };
+    if (intention.reasoning !== undefined && (typeof intention.reasoning !== 'string' || intention.reasoning.length > INTENTION_REASONING_MAX_LENGTH)) return { ok: false, reason: 'INVALID_INTENTION' };
+    if (intention.parameters !== undefined && byteLength(intention.parameters) > INTENTION_PARAMETERS_MAX_BYTES) return { ok: false, reason: 'INVALID_INTENTION' };
+
+    const replayClaim = this.claimReplayIdentity('intention', intention.id);
+    if (replayClaim === 'UNAVAILABLE') return { ok: false, reason: 'REPLAY_LEDGER_UNAVAILABLE' };
+    if (replayClaim === 'REPLAY') return { ok: false, reason: 'INTENTION_REPLAY' };
+
+    return { ok: true, intention: { ...intention, parameters: intention.parameters ? JSON.parse(JSON.stringify(intention.parameters)) : undefined } };
   }
 
   private rejectEnvelope(reason: string): null {
@@ -239,9 +263,10 @@ export class CognitionLoop {
     for (const id of a) if (r.has(id) || d.has(id)) return this.rejectEnvelope('OVERLAPPING_DELIBERATION_IDS');
     for (const id of r) if (d.has(id)) return this.rejectEnvelope('OVERLAPPING_DELIBERATION_IDS');
     const control = result.control ?? 'NONE';
-    if (!['NONE', 'PAUSE', 'STOP'].includes(control)) return this.rejectEnvelope('INVALID_CONTROL_RESULT');
-    const intention = this.validateIntention(result.intention, now);
-    if (intention === false) return this.rejectEnvelope('INVALID_INTENTION');
+    if (!['NONE', 'PAUSE', 'STOP', 'CANCEL'].includes(control)) return this.rejectEnvelope('INVALID_CONTROL_RESULT');
+    const validation = this.validateIntention(result.intention, now);
+    if (!validation.ok) return this.rejectEnvelope(validation.reason);
+    const intention = validation.intention;
     if (control !== 'NONE' && (intention !== null || a.size < 1)) return this.rejectEnvelope('INVALID_CONTROL_BINDING');
     this.lastBoundaryRejection = null;
     return { intention, control, acceptedInfluenceIds: [...a], rejectedInfluenceIds: [...r], deferredInfluenceIds: [...d] };
@@ -331,6 +356,7 @@ export class CognitionLoop {
       actionCount: this.actions.getActionCount(),
       lastBoundaryRejection: this.lastBoundaryRejection,
       activeOperationCount: this.activeControllers.size,
+      replayLedgerAvailable: this.replayLedger !== null,
     };
   }
 }

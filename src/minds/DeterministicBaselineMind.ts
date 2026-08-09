@@ -3,11 +3,12 @@ import { Mind, CognitionContext, Intention, ActionId, DeliberationResult, Cognit
 
 /** Fixed demonstration policy. It is not open-ended and proves no autonomy/personhood claim. */
 export class DeterministicBaselineMind implements Mind {
-  name = 'DeterministicBaselineMind-v3';
+  name = 'DeterministicBaselineMind-v4';
   private static readonly WALK = ['walk', 'walk please', 'please walk', 'go to kitchen', 'go to bathroom', 'go to bedroom'];
   private static readonly REST = ['rest', 'nap', 'sleep', 'please rest', 'please nap'];
   private static readonly EAT = ['eat', 'please eat', 'i am hungry'];
-  private static readonly STOP = ['stop', 'do not act', "don't act", 'cancel'];
+  private static readonly STOP = ['stop', 'do not act', "don't act"];
+  private static readonly CANCEL = ['cancel', 'cancel action', 'cancel actions'];
   private static readonly PAUSE = ['pause', 'pause actions'];
 
   async deliberate(ctx: Readonly<CognitionContext>, signal: AbortSignal): Promise<DeliberationResult> {
@@ -21,6 +22,7 @@ export class DeterministicBaselineMind implements Mind {
       if (inf.channel !== 'voice' || typeof inf.content !== 'string') continue;
       const text = this.normalize(inf.content);
       if (this.matches(text, DeterministicBaselineMind.STOP)) return this.control('STOP', inf.id);
+      if (this.matches(text, DeterministicBaselineMind.CANCEL)) return this.control('CANCEL', inf.id);
       if (this.matches(text, DeterministicBaselineMind.PAUSE)) return this.control('PAUSE', inf.id);
     }
 

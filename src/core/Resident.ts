@@ -3,6 +3,7 @@ import { Mind, Perception, BodyState, InfluenceEvent } from './types';
 import { NeedsEngine } from './NeedsEngine';
 import { ActionSystem } from './ActionSystem';
 import { CognitionLoop, InfluenceIngestionResult, ResumeRequest, ControlAuthorizer } from './CognitionLoop';
+import { ReplayLedger } from './ReplayLedger';
 
 export class Resident {
   readonly id: string;
@@ -10,7 +11,7 @@ export class Resident {
   private readonly cognition: CognitionLoop;
   private readonly mind: Mind;
 
-  constructor(name: string, mind: Mind, initialLocation = 'home', controlAuthorizer?: ControlAuthorizer) {
+  constructor(name: string, mind: Mind, initialLocation = 'home', controlAuthorizer?: ControlAuthorizer, replayLedger?: ReplayLedger | null) {
     if (typeof name !== 'string' || !name.trim() || name.length > 200) throw new TypeError('Resident name is required and bounded.');
     if (typeof initialLocation !== 'string' || !initialLocation.trim() || initialLocation.length > 200) throw new TypeError('Initial location is required and bounded.');
     this.id = randomUUID();
@@ -23,7 +24,7 @@ export class Resident {
       timestamp: Date.now(), location: initialLocation.trim(), nearbyObjects: ['bed', 'kitchen', 'bathroom', 'chair', 'mirror'],
       nearbyResidents: [], environmentNotes: ['quiet interior space'],
     };
-    this.cognition = new CognitionLoop(mind, needs, actions, initialPerception, this.id, 1500, 1000, 1000, controlAuthorizer);
+    this.cognition = new CognitionLoop(mind, needs, actions, initialPerception, this.id, 1500, 1000, 1000, controlAuthorizer, replayLedger);
   }
 
   awaken() { return this.cognition.start(); }

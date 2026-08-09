@@ -31,8 +31,8 @@ export const ACTION_IDS = [
 ] as const;
 
 export type ActionId = typeof ACTION_IDS[number];
-export type CognitionControl = 'NONE' | 'PAUSE' | 'STOP';
-export type CognitionControlState = 'ACTIVE' | 'PAUSED' | 'STOPPED';
+export type CognitionControl = 'NONE' | 'PAUSE' | 'STOP' | 'CANCEL';
+export type CognitionControlState = 'ACTIVE' | 'PAUSED' | 'STOPPED' | 'CANCELLED';
 
 export type ActionLifecycle =
   | 'REQUESTED' | 'VALIDATED' | 'STARTED' | 'INTERRUPTED'
