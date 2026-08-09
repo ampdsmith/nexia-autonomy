@@ -7,6 +7,12 @@ function cloneBody(body: BodyState): BodyState {
 function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw signal.reason instanceof Error ? signal.reason : new Error('ACTION_ABORTED');
 }
+function boundedDestination(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const destination = value.trim();
+  if (!destination || destination.length > 200) return null;
+  return destination;
+}
 
 export interface ActionSystemOptions {
   expectedConsentAuthorityId?: string;
@@ -54,6 +60,13 @@ export class ActionSystem {
           return this.ok(intention.id, 'COMPLETED', 'Got back up.');
         }
         return this.fail(intention.id, 'FAILED', 'Already upright.');
+      case 'walk': {
+        const destination = boundedDestination(intention.parameters?.destination);
+        if (!destination) return this.fail(intention.id, 'FAILED', 'Walk requires a non-empty bounded destination.');
+        throwIfAborted(signal);
+        this.body.location = destination;
+        return this.ok(intention.id, 'COMPLETED', `Walked to ${destination}.`);
+      }
       case 'idle':
       case 'observe': return this.ok(intention.id, 'COMPLETED', 'Observing / resting in place.');
       case 'speak': return this.notImplemented(intention.id, 'speak');
@@ -76,7 +89,7 @@ export class ActionSystem {
         }, this.consentReplayLedger);
         return this.fail(intention.id, 'FAILED', `[FAIL-CLOSED] ${validation.message} (status: ${validation.status})`);
       }
-      case 'walk': case 'run': case 'hop': case 'jump': case 'skip':
+      case 'run': case 'hop': case 'jump': case 'skip':
       case 'eat': case 'drink': case 'useRestroom': case 'nap':
       case 'bathe': case 'brushTeeth': case 'combHair': case 'dress':
       case 'undress': case 'cook': case 'work':
