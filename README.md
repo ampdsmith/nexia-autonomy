@@ -13,11 +13,29 @@ PERSONHOOD PROVEN:          NO
 PRODUCTION STATUS:          NO
 ```
 
-## CLEOPATRA usability / replay correction 03
+## CLEOPATRA replay-authority capacity correction 04
 
 Work order: `NEXIA-AUTONOMY-DONOR-HARDENING-001-CLEOPATRA-TAKEOVER-01`
 
-This forward-only usability pass continues the same authorized donor-hardening lane:
+Continuous builder inspection after correction 03 found that `InMemoryReplayLedger` preserved replay authority correctly but retained accepted influence/intention identities without any capacity boundary. A sufficiently long-lived or adversarial donor process could therefore turn replay protection into unbounded process-memory growth.
+
+Correction 04:
+
+- gives `InMemoryReplayLedger` an explicit positive bounded capacity;
+- keeps the default donor capacity at 100,000 one-time identity claims;
+- never evicts old authoritative replay identities to make room for new ones;
+- returns `REPLAY` for an already-recorded identity even when capacity is full;
+- throws a bounded capacity-exhaustion error for a new identity once capacity is full;
+- relies on the existing `CognitionLoop` fail-closed replay-authority boundary so capacity exhaustion rejects new influence/intention identity claims instead of silently weakening replay protection;
+- adds direct and cognition-boundary regression coverage for capacity exhaustion.
+
+### Replay-authority capacity limitation
+
+The default replay authority remains an in-memory, process-lifetime donor implementation. Its 100,000-claim capacity is a bounded safety limit, not production sizing guidance. Capacity exhaustion blocks new one-time identity claims until a separately governed replacement ledger/process is provided. No automatic eviction, database persistence, process restart durability, or canonical production behavior is claimed.
+
+## CLEOPATRA usability / replay correction 03
+
+This forward-only usability pass continued the same authorized donor-hardening lane:
 
 - the shipped demo now queues its bounded influence before awakening the Resident and waits long enough for the default cognition tick to process it;
 - the demo fails loudly if accepted input is never processed, instead of exiting successfully with zero processed influences, zero processed intentions, and zero actions;
@@ -25,7 +43,7 @@ This forward-only usability pass continues the same authorized donor-hardening l
 - `ConsentReplayLedger` no longer evicts old one-time decision/reference identities when its bounded capacity is reached;
 - when consent replay capacity is exhausted, new exact-instance preflights fail closed as `REPLAY_LEDGER_FULL` rather than deleting old replay evidence;
 - old consent decisions remain replay-blocked after capacity is reached;
-- new regression coverage exercises the direct consent boundary and the `ActionSystem` boundary at capacity.
+- regression coverage exercises the direct consent boundary and the `ActionSystem` boundary at capacity.
 
 ### Consent replay capacity limitation
 
@@ -72,11 +90,12 @@ npm run build
 npm run demo
 ```
 
-Focused replay/cancel and consent-capacity checks:
+Focused checks:
 
 ```bash
 npm run test:replay
 npm run test:consent
+npm run test:replay-capacity
 ```
 
 ## Known limitations
@@ -87,6 +106,7 @@ npm run test:consent
 - Consent remains preflight-only and always blocks sensitive execution.
 - Cooperative cancellation requires extension Minds and asynchronous action adapters to honor the provided `AbortSignal`; JavaScript cannot forcibly terminate a non-cooperative promise.
 - The default replay ledger and consent replay ledger are process-lifetime only and are not production persistence.
+- Replay-authority capacity exhaustion intentionally blocks new identity claims instead of evicting old replay evidence.
 - No canonical NEXA Intimacy contract, live provider, database, production identity, deployment, or external action is connected.
 - No GitHub Actions CI workflow is installed or claimed passed.
 - The committed `package-lock.json` contains only root intent and is not a complete registry-resolved transitive lock graph.
@@ -99,6 +119,7 @@ Preserved main: 73d121c929abb071cbc90d6a85d7e1b8208311ca
 Authorized branch: work/nexia-autonomy-donor-hardening-v1
 Audit correction 01 head: 3e336392f6f08f4659b123a15a52fa7952e2e2d3
 Audit correction 02 evidence head: 95d2260b735b6b20ccd7324afb26d9b8fc723a03
+Usability / replay correction 03 evidence head: 55f2905c863a3c6d25581bf29e7f4c0817bbd16d
 Direct writes to main: forbidden
 New branches or repositories: forbidden
 ```
