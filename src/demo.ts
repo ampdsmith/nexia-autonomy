@@ -5,7 +5,7 @@ import { createVoiceInfluence } from './input/InfluenceChannels';
 async function main() {
   console.log('=== NEXIA AUTONOMY QUARANTINED DONOR DEMO ===');
   console.log('Deterministic demonstration policy. No free-will, consciousness, personhood, or canonical integration claim.');
-  console.log('This demo verifies bounded influence ingestion and cognition processing; most physical actions remain NOT_IMPLEMENTED by design.\n');
+  console.log('This demo verifies bounded influence ingestion, cognition processing, and one completed donor-side walk state transition.\n');
 
   const resident = new Resident('Local donor resident', new DeterministicBaselineMind(), 'home');
 
@@ -28,9 +28,14 @@ async function main() {
   if (processed.processedCount < 1 || processed.processedIntentionCount < 1 || processed.actionCount < 1) {
     throw new Error('DEMO_DID_NOT_PROCESS_ACCEPTED_INFLUENCE');
   }
+  if (processed.body.location !== 'nearby') {
+    throw new Error(`DEMO_WALK_DID_NOT_COMPLETE:${processed.body.location}`);
+  }
 
   resident.sleep();
-  console.log('Final local status:', resident.status());
+  const finalStatus = resident.status();
+  console.log('Final local status:', finalStatus);
+  console.log('Demo proof: bounded walk completed; location home -> nearby.');
 }
 
 main().catch((error) => {
