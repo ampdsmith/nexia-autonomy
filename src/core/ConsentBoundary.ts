@@ -1,7 +1,8 @@
 /** Donor-side consent preflight only. This module never authorizes execution. */
 export type ConsentStatus =
   | 'CONTRACT_PENDING' | 'ABSENT' | 'EXPIRED' | 'REVOKED'
-  | 'PAUSED' | 'STOPPED' | 'SOS' | 'MALFORMED' | 'MISMATCH' | 'REPLAY';
+  | 'PAUSED' | 'STOPPED' | 'SOS' | 'MALFORMED' | 'MISMATCH' | 'REPLAY'
+  | 'REPLAY_LEDGER_FULL';
 
 export interface ExternalConsentDecision {
   decisionId: string;
@@ -53,20 +54,15 @@ export class ConsentReplayLedger {
     return this.decisionIds.has(decisionId) || this.oneTimeReferences.has(oneTimeUseReference);
   }
 
-  record(decisionId: string, oneTimeUseReference: string): void {
+  record(decisionId: string, oneTimeUseReference: string): boolean {
+    if (this.decisionIds.size >= this.maxEntries || this.oneTimeReferences.size >= this.maxEntries) return false;
     this.decisionIds.add(decisionId);
     this.oneTimeReferences.add(oneTimeUseReference);
-    this.trim(this.decisionIds);
-    this.trim(this.oneTimeReferences);
+    return true;
   }
 
-  private trim(set: Set<string>): void {
-    while (set.size > this.maxEntries) {
-      const first = set.values().next().value as string | undefined;
-      if (first === undefined) break;
-      set.delete(first);
-    }
-  }
+  getEntryCount(): number { return this.decisionIds.size; }
+  getCapacity(): number { return this.maxEntries; }
 }
 
 export function validateExternalConsent(
@@ -107,7 +103,9 @@ export function validateExternalConsent(
   if (replayLedger.has(decision.decisionId, decision.oneTimeUseReference)) {
     return { status: 'REPLAY', allowed: false, message: 'Consent decision or one-time-use reference has already been presented.' };
   }
-  replayLedger.record(decision.decisionId, decision.oneTimeUseReference);
+  if (!replayLedger.record(decision.decisionId, decision.oneTimeUseReference)) {
+    return { status: 'REPLAY_LEDGER_FULL', allowed: false, message: 'Consent replay ledger capacity is exhausted. One-time-use verification cannot be extended safely; execution remains blocked.' };
+  }
   return {
     status: 'CONTRACT_PENDING',
     allowed: false,
