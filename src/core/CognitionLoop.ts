@@ -329,6 +329,12 @@ export class CognitionLoop {
               if (!this.running || this.generation !== myGeneration || this.controlState !== 'ACTIVE') break;
               this.recentResults.push(cloneAction(actionResult));
               if (this.recentResults.length > 30) this.recentResults.shift();
+              if (actionResult.success) {
+                const bodyAfter = this.actions.getBody();
+                if (bodyAfter.location !== this.lastPerception.location) {
+                  this.lastPerception = { ...clonePerception(this.lastPerception), timestamp: Date.now(), location: bodyAfter.location };
+                }
+              }
               if (actionResult.success && actionResult.newStateHints) {
                 for (const [key, value] of Object.entries(actionResult.newStateHints)) this.needs.applyDelta(key as any, value as number);
               }
