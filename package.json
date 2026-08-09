@@ -13,10 +13,11 @@
     "start": "node dist/index.js",
     "demo": "ts-node src/demo.ts",
     "dev": "ts-node-dev --respawn src/demo.ts",
-    "test": "ts-node src/tests/hardening.test.ts && ts-node src/tests/replay-ledger-correction.test.ts && ts-node src/tests/consent-replay-capacity.test.ts && ts-node src/tests/replay-ledger-capacity.test.ts",
+    "test": "ts-node src/tests/hardening.test.ts && ts-node src/tests/replay-ledger-correction.test.ts && ts-node src/tests/consent-replay-capacity.test.ts && ts-node src/tests/replay-ledger-capacity.test.ts && ts-node src/tests/influence-factory-boundary.test.ts",
     "test:replay": "ts-node src/tests/replay-ledger-correction.test.ts",
     "test:consent": "ts-node src/tests/consent-replay-capacity.test.ts",
-    "test:replay-capacity": "ts-node src/tests/replay-ledger-capacity.test.ts"
+    "test:replay-capacity": "ts-node src/tests/replay-ledger-capacity.test.ts",
+    "test:factories": "ts-node src/tests/influence-factory-boundary.test.ts"
   },
   "keywords": [
     "autonomy",
