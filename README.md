@@ -13,9 +13,26 @@ PERSONHOOD PROVEN:          NO
 PRODUCTION STATUS:          NO
 ```
 
-## CLEOPATRA influence-factory boundary correction 05
+## CLEOPATRA bounded walk usability correction 06
 
 Work order: `NEXIA-AUTONOMY-DONOR-HARDENING-001-CLEOPATRA-TAKEOVER-01`
+
+Continuous usability inspection found that the shipped demo could prove an action attempt occurred while the actual `walk` action still returned `NOT_IMPLEMENTED`. That was not strong enough to demonstrate a usable donor path.
+
+Correction 06 adds one bounded, explicitly local donor-side movement behavior:
+
+- `ActionSystem` now implements `walk` as a bounded location transition;
+- destination must be a non-empty trimmed string of at most 200 characters;
+- missing, blank, or oversized destinations fail closed without location mutation;
+- an already-aborted action signal rejects before mutation;
+- caller-owned initial body state remains cloned and is not mutated;
+- `run`, `hop`, `jump`, `skip`, and the remaining unimplemented actions stay `NOT_IMPLEMENTED`;
+- the shipped demo now exits nonzero unless its accepted `walk` influence is processed and the Resident body location changes from `home` to `nearby`;
+- dedicated `walk-action-usability.test.ts` regression coverage verifies the successful transition and negative boundaries.
+
+This is a local donor-state transition only. It does not claim canonical world navigation, pathfinding, collision avoidance, physics, GeoOS integration, deployment, or production embodiment.
+
+## CLEOPATRA influence-factory boundary correction 05
 
 Continuous public-API usability inspection found that the mouse/touch factory helpers could construct events that the cognition ingestion boundary would later reject. The factories accepted out-of-range mouse buttons, empty optional target/gesture strings, duplicate/fractional touch IDs, and unknown runtime fields.
 
@@ -50,7 +67,6 @@ This forward-only usability pass continued the same authorized donor-hardening l
 
 - the shipped demo now queues its bounded influence before awakening the Resident and waits long enough for the default cognition tick to process it;
 - the demo fails loudly if accepted input is never processed, instead of exiting successfully with zero processed influences, zero processed intentions, and zero actions;
-- the demo states that it proves bounded ingestion/cognition flow only and does not pretend that unimplemented physical actions succeeded;
 - `ConsentReplayLedger` no longer evicts old one-time decision/reference identities when its bounded capacity is reached;
 - when consent replay capacity is exhausted, new exact-instance preflights fail closed as `REPLAY_LEDGER_FULL` rather than deleting old replay evidence;
 - old consent decisions remain replay-blocked after capacity is reached;
@@ -108,13 +124,15 @@ npm run test:replay
 npm run test:consent
 npm run test:replay-capacity
 npm run test:factories
+npm run test:walk
 ```
 
 ## Known limitations
 
 - This is a donor framework, not a final Resident mind, NEXIA runtime, embodiment system, physics layer, inventory system, or production service.
 - `DeterministicBaselineMind` is a fixed demonstration policy, not open-ended cognition.
-- Most actions remain `NOT_IMPLEMENTED` and perform zero state mutation.
+- Bounded local `walk`, `fall`, `getUp`, `idle`, and `observe` behavior exists; most other actions remain `NOT_IMPLEMENTED` and perform zero state mutation.
+- The bounded `walk` transition is local donor state only; it does not provide canonical navigation, pathfinding, collision avoidance, physics, or GeoOS integration.
 - Consent remains preflight-only and always blocks sensitive execution.
 - Cooperative cancellation requires extension Minds and asynchronous action adapters to honor the provided `AbortSignal`; JavaScript cannot forcibly terminate a non-cooperative promise.
 - The default replay ledger and consent replay ledger are process-lifetime only and are not production persistence.
@@ -133,6 +151,7 @@ Audit correction 01 head: 3e336392f6f08f4659b123a15a52fa7952e2e2d3
 Audit correction 02 evidence head: 95d2260b735b6b20ccd7324afb26d9b8fc723a03
 Usability / replay correction 03 evidence head: 55f2905c863a3c6d25581bf29e7f4c0817bbd16d
 Replay-authority capacity correction 04 evidence head: c58ef024ffffae1ff6fb1bffdd19901ce34c56ab
+Influence-factory boundary correction 05 evidence head: 54f8b5e75f336baab04b75d94b347fe30668d61e
 Direct writes to main: forbidden
 New branches or repositories: forbidden
 ```
