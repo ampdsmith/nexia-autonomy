@@ -13,14 +13,30 @@ PERSONHOOD PROVEN:          NO
 PRODUCTION STATUS:          NO
 ```
 
-## CLEOPATRA independent-audit correction 02
+## CLEOPATRA usability / replay correction 03
 
 Work order: `NEXIA-AUTONOMY-DONOR-HARDENING-001-CLEOPATRA-TAKEOVER-01`
 
-This forward-only correction responds to MINERVA Issue #2 return `5231707694` and also closes the already-known distinct-cancel gap before re-audit:
+This forward-only usability pass continues the same authorized donor-hardening lane:
 
-- introduces an explicit donor-side `ReplayLedger` authority boundary for influence and intention identities;
-- keeps bounded local replay sets only as performance caches, never as replay authority;
+- the shipped demo now queues its bounded influence before awakening the Resident and waits long enough for the default cognition tick to process it;
+- the demo fails loudly if accepted input is never processed, instead of exiting successfully with zero processed influences, zero processed intentions, and zero actions;
+- the demo states that it proves bounded ingestion/cognition flow only and does not pretend that unimplemented physical actions succeeded;
+- `ConsentReplayLedger` no longer evicts old one-time decision/reference identities when its bounded capacity is reached;
+- when consent replay capacity is exhausted, new exact-instance preflights fail closed as `REPLAY_LEDGER_FULL` rather than deleting old replay evidence;
+- old consent decisions remain replay-blocked after capacity is reached;
+- new regression coverage exercises the direct consent boundary and the `ActionSystem` boundary at capacity.
+
+### Consent replay capacity limitation
+
+The donor consent replay ledger remains in-memory and process-lifetime only. It is deliberately bounded. Once capacity is exhausted, the donor blocks new exact-instance consent preflights rather than weakening one-time replay protection. This is not canonical NEXA Intimacy persistence or production storage.
+
+## CLEOPATRA independent-audit correction 02
+
+This earlier forward-only correction responded to MINERVA Issue #2 return `5231707694` and also closed the distinct-cancel gap before re-audit:
+
+- introduced an explicit donor-side `ReplayLedger` authority boundary for influence and intention identities;
+- kept bounded local replay sets only as performance caches, never as replay authority;
 - the default donor ledger retains claims without eviction for the lifetime of the process and is shared across reconstructed `CognitionLoop` instances;
 - callers may inject a separately governed replay-ledger implementation when stronger persistence is available;
 - a missing or throwing authoritative replay ledger fails closed instead of accepting an unverifiable identity;
@@ -53,12 +69,14 @@ This earlier narrow audit correction:
 npm install
 npm test
 npm run build
+npm run demo
 ```
 
-Focused replay/cancel correction only:
+Focused replay/cancel and consent-capacity checks:
 
 ```bash
 npm run test:replay
+npm run test:consent
 ```
 
 ## Known limitations
@@ -68,7 +86,7 @@ npm run test:replay
 - Most actions remain `NOT_IMPLEMENTED` and perform zero state mutation.
 - Consent remains preflight-only and always blocks sensitive execution.
 - Cooperative cancellation requires extension Minds and asynchronous action adapters to honor the provided `AbortSignal`; JavaScript cannot forcibly terminate a non-cooperative promise.
-- The default replay ledger is process-lifetime only and is not production persistence.
+- The default replay ledger and consent replay ledger are process-lifetime only and are not production persistence.
 - No canonical NEXA Intimacy contract, live provider, database, production identity, deployment, or external action is connected.
 - No GitHub Actions CI workflow is installed or claimed passed.
 - The committed `package-lock.json` contains only root intent and is not a complete registry-resolved transitive lock graph.
@@ -80,6 +98,7 @@ npm run test:replay
 Preserved main: 73d121c929abb071cbc90d6a85d7e1b8208311ca
 Authorized branch: work/nexia-autonomy-donor-hardening-v1
 Audit correction 01 head: 3e336392f6f08f4659b123a15a52fa7952e2e2d3
+Audit correction 02 evidence head: 95d2260b735b6b20ccd7324afb26d9b8fc723a03
 Direct writes to main: forbidden
 New branches or repositories: forbidden
 ```
